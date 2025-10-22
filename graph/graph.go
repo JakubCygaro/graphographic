@@ -9,6 +9,8 @@ type Node struct {
 	Position rl.Vector2
 	Contents string
 	Edges *list.List
+	// saved from draw pass
+	Radius float32
 }
 
 type Edge struct {

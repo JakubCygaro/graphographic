@@ -3,36 +3,41 @@ package main
 import (
 	"container/list"
 	gr "graphographic/graph"
+	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/exp/constraints"
 )
 
 const (
-	WIDTH          = 800
-	HEIGHT         = 600
 	FONT_SIZE      = 24
 	FONT_SPACING   = 10
 	SCALE_MINIMUM  = 10. / float32(FONT_SIZE)
 	LINE_THICKNESS = 4.0
+	TARGET_FPS     = 60
 )
 const (
 	MODE_PLACE   = iota
 	MODE_APPEND  = iota
 	MODE_CONNECT = iota
+	MODE_EDIT    = iota
+	MODE_MOVE    = iota
 )
 
 var (
-	Graph                      = gr.New()
-	Scale           float32    = 1.0
-	Offset          rl.Vector2 = rl.Vector2Zero()
-	Center          rl.Vector2 = rl.Vector2Scale(rl.Vector2{X: WIDTH, Y: HEIGHT}, 0.5)
-	BackgroundColor            = rl.White
-	GraphColor                 = rl.Black
-	Mode            int32      = MODE_PLACE
-	NodeA           *gr.Node   = nil
-	NodeB           *gr.Node   = nil
-	Directed        bool       = false
+	Width                        = 800
+	Height                       = 600
+	Graph                        = gr.New()
+	Scale             float32    = 1.0
+	Offset            rl.Vector2 = rl.Vector2Zero()
+	Center            rl.Vector2 = rl.Vector2Scale(rl.Vector2{X: float32(Width), Y: float32(Height)}, 0.5)
+	BackgroundColor              = rl.White
+	GraphColor                   = rl.Black
+	SelectedNodeColor            = rl.SkyBlue
+	Mode              int32      = MODE_PLACE
+	NodeA             *gr.Node   = nil
+	NodeB             *gr.Node   = nil
+	Directed          bool       = false
 )
 
 func clamp[T constraints.Ordered](value, min, max T) T {
@@ -56,8 +61,9 @@ func wrap[T constraints.Ordered](value, min, max T) T {
 }
 
 func main() {
-	rl.InitWindow(WIDTH, HEIGHT, "Graphographic")
-
+	rl.SetConfigFlags(rl.FlagWindowResizable)
+	rl.InitWindow(int32(Width), int32(Height), "Graphographic")
+	rl.SetTargetFPS(TARGET_FPS)
 	for !rl.WindowShouldClose() {
 		rl.BeginDrawing()
 		rl.ClearBackground(BackgroundColor)
@@ -91,7 +97,7 @@ func findNodeUnderMouse(mousePos rl.Vector2) *gr.Node {
 	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
 		node := nodeIt.Value.(*gr.Node)
 		radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
-		if rl.Vector2Distance(getScreenPos(node.Position), mousePos) <= radius + LINE_THICKNESS {
+		if rl.Vector2Distance(getScreenPos(node.Position), mousePos) <= radius+LINE_THICKNESS {
 			return node
 		}
 	}
@@ -99,9 +105,35 @@ func findNodeUnderMouse(mousePos rl.Vector2) *gr.Node {
 }
 
 func update() {
+	if rl.IsWindowResized() {
+		Width = rl.GetScreenWidth()
+		Height = rl.GetScreenHeight()
+	}
 	mousePos := getMouseWorldPos()
-	if rl.IsKeyReleased(rl.KeyC) {
-		Mode = wrap(Mode+1, int32(MODE_PLACE), int32(MODE_CONNECT))
+	if Mode == MODE_EDIT && NodeA != nil {
+		editModeTyping()
+	} else {
+		if rl.IsKeyReleased(rl.KeyS) {
+			Mode = wrap(Mode+1, int32(MODE_PLACE), int32(MODE_MOVE))
+		}
+		if rl.IsKeyReleased(rl.KeyE) {
+			Mode = MODE_EDIT
+		}
+		if rl.IsKeyReleased(rl.KeyM) {
+			Mode = MODE_MOVE
+		}
+		if rl.IsKeyReleased(rl.KeyA) {
+			Mode = MODE_APPEND
+		}
+		if rl.IsKeyReleased(rl.KeyP) {
+			Mode = MODE_PLACE
+		}
+		if rl.IsKeyReleased(rl.KeyC) {
+			Mode = MODE_CONNECT
+		}
+	}
+	if rl.IsKeyReleased(rl.KeyEscape) {
+		NodeA = nil
 	}
 
 	if rl.IsMouseButtonDown(rl.MouseButtonLeft) {
@@ -117,9 +149,16 @@ func update() {
 			if NodeA != nil && NodeB == nil {
 				NodeB = &gr.Node{
 					Position: NodeA.Position,
-					Contents: "New Node",
-					Edges: list.New(),
+					Contents: "Node",
+					Edges:    list.New(),
 				}
+			}
+		case MODE_MOVE:
+			if NodeA == nil {
+				NodeA = findNodeUnderMouse(rl.GetMousePosition())
+			}
+			if NodeA != nil {
+				NodeA.Position = getMouseWorldPos()
 			}
 		}
 	}
@@ -129,18 +168,20 @@ func update() {
 		case MODE_PLACE:
 			node := gr.NewNode()
 			node.Position = mousePos
-			node.Contents = "New node"
+			node.Contents = "Node"
 			Graph.Nodes.PushBack(
 				&node,
 			)
 		case MODE_CONNECT:
 			NodeB = findNodeUnderMouse(rl.GetMousePosition())
-			if NodeA != nil && NodeB != nil && !NodeA.IsConnectedTo(NodeB){
+			if NodeA != nil && NodeB != nil && !NodeA.IsConnectedTo(NodeB) {
 				Graph.AddEdge(NodeA, NodeB)
 				if !Directed {
 					Graph.AddEdge(NodeB, NodeA)
 				}
 			}
+			NodeA = nil
+			NodeB = nil
 		case MODE_APPEND:
 			if NodeA != nil && NodeB != nil {
 				Graph.Nodes.PushBack(NodeB)
@@ -149,9 +190,13 @@ func update() {
 					Graph.AddEdge(NodeB, NodeA)
 				}
 			}
+			NodeA = nil
+			NodeB = nil
+		case MODE_EDIT:
+			NodeA = findNodeUnderMouse(rl.GetMousePosition())
+		case MODE_MOVE:
+			NodeA = nil
 		}
-		NodeA = nil
-		NodeB = nil
 	}
 
 	if rl.IsMouseButtonDown(rl.MouseButtonRight) {
@@ -165,26 +210,30 @@ func update() {
 		Scale = rl.Clamp(Scale, SCALE_MINIMUM, 100)
 	}
 	if Mode == MODE_APPEND && NodeB != nil {
-		NodeB.Position = mousePos;
+		NodeB.Position = mousePos
+	}
+}
+
+func editModeTyping() {
+	selected := NodeA
+	if rl.IsKeyPressed(rl.KeyBackspace) {
+		end := clamp(len(selected.Contents)-1, 0, len(selected.Contents))
+		selected.Contents = selected.Contents[0:end]
+	}
+	for ch := rl.GetCharPressed(); ch != 0; ch = rl.GetCharPressed() {
+		r := rune(ch)
+		selected.Contents += string(r)
 	}
 }
 
 func draw() {
-	if NodeA != nil {
-		positionA := getScreenPos(NodeA.Position)
-		mousePos := rl.GetMousePosition()
-		rl.DrawLineEx(
-			mousePos,
-			positionA,
-			LINE_THICKNESS,
-			GraphColor,
-		)
+	if (Mode == MODE_CONNECT || Mode == MODE_APPEND) && NodeA != nil {
+		drawArrow(NodeA.Position, getMouseWorldPos(), 15, 10)
 		if Mode == MODE_APPEND && NodeB != nil {
 			drawNode(NodeB)
 		}
 	}
 	drawGraph()
-
 	var mode string = "Mode: "
 	switch Mode {
 	case MODE_PLACE:
@@ -193,12 +242,16 @@ func draw() {
 		mode += "CONNECT"
 	case MODE_APPEND:
 		mode += "APPEND"
+	case MODE_EDIT:
+		mode += "EDIT"
+	case MODE_MOVE:
+		mode += "MOVE"
 	}
 	size := rl.MeasureTextEx(rl.GetFontDefault(), mode, FONT_SIZE, FONT_SPACING)
 	rl.DrawTextEx(
 		rl.GetFontDefault(),
 		mode,
-		rl.Vector2{X: 0, Y: HEIGHT - size.Y},
+		rl.Vector2{X: 0, Y: float32(Height) - size.Y},
 		FONT_SIZE,
 		FONT_SPACING,
 		rl.Red,
@@ -209,14 +262,15 @@ func drawGraph() {
 	// draw edges
 	for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 		edge := edgeIt.Value.(*gr.Edge)
-		tailPos := getScreenPos(edge.Tail.Position)
-		headPos := getScreenPos(edge.Head.Position)
-		rl.DrawLineEx(
-			tailPos,
-			headPos,
-			LINE_THICKNESS,
-			GraphColor,
-		)
+		tailPos := edge.Tail.Position
+		headPos := edge.Head.Position
+
+		dir := rl.Vector2Subtract(tailPos, headPos)
+		dir = rl.Vector2Normalize(dir)
+		dir = rl.Vector2Scale(dir, edge.Head.Radius)
+		headPos = rl.Vector2Add(headPos, dir)
+
+		drawArrow(tailPos, headPos, 15, 10)
 	}
 	// draw nodes
 	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
@@ -225,22 +279,60 @@ func drawGraph() {
 	}
 }
 
-func drawNode(node *gr.Node){
+func drawNode(node *gr.Node) {
 	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
+	radius *= 1.2
 	position := getScreenPos(node.Position)
 	textPosition := position
-	rl.DrawCircle(int32(position.X), int32(position.Y), radius+LINE_THICKNESS, GraphColor)
+	var color rl.Color
+	amISelected := (Mode == MODE_EDIT || Mode == MODE_MOVE) && node == NodeA
+	if amISelected {
+		color = SelectedNodeColor
+	} else {
+		color = GraphColor
+	}
+	node.Radius = radius+LINE_THICKNESS
+	rl.DrawCircle(int32(position.X), int32(position.Y), radius+LINE_THICKNESS, color)
+
 	rl.DrawCircle(int32(position.X), int32(position.Y), radius, BackgroundColor)
 
-	size := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, FONT_SIZE*Scale, FONT_SPACING)
+	text := node.Contents
+	size := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, FONT_SIZE*Scale, FONT_SPACING-2)
+	if size.X > 2*radius && !amISelected {
+		text = "..."
+		size = rl.MeasureTextEx(rl.GetFontDefault(), text, FONT_SIZE*Scale, FONT_SPACING-2)
+	}
 	textPosition = rl.Vector2Subtract(textPosition, rl.Vector2Scale(size, 0.5))
 
 	rl.DrawTextEx(
 		rl.GetFontDefault(),
-		node.Contents,
+		text,
 		textPosition,
 		FONT_SIZE*Scale,
-		FONT_SPACING,
+		FONT_SPACING-2,
 		rl.Red,
 	)
+}
+
+func drawArrow(a, b rl.Vector2, h, w float32) {
+	dir := rl.Vector2Subtract(a, b)
+	dir = rl.Vector2Normalize(dir)
+	height := rl.Vector2Scale(dir, h)
+	b_ := rl.Vector2Add(b, height)
+
+	rl.DrawLineEx(getScreenPos(a), getScreenPos(b_), LINE_THICKNESS, GraphColor)
+
+	width := rl.Vector2Rotate(dir, -90 * (math.Pi / 180))
+	width = rl.Vector2Scale(width, w)
+
+	x := rl.Vector2Add(b, width)
+	x = rl.Vector2Add(x, height)
+
+	y := b
+
+	z := rl.Vector2Subtract(b, width)
+	z = rl.Vector2Add(z, height)
+
+	rl.DrawTriangle(getScreenPos(x), getScreenPos(y), getScreenPos(z), GraphColor)
+	
 }
