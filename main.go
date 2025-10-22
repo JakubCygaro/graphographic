@@ -38,6 +38,8 @@ var (
 	NodeA             *gr.Node   = nil
 	NodeB             *gr.Node   = nil
 	Directed          bool       = false
+	GridGrain         float32    = 5
+	GridSpacing       float32    = float32(Width) / GridGrain
 )
 
 func clamp[T constraints.Ordered](value, min, max T) T {
@@ -227,6 +229,7 @@ func editModeTyping() {
 }
 
 func draw() {
+	drawGrid()
 	if (Mode == MODE_CONNECT || Mode == MODE_APPEND) && NodeA != nil {
 		drawArrow(NodeA.Position, getMouseWorldPos(), 15, 10)
 		if Mode == MODE_APPEND && NodeB != nil {
@@ -291,7 +294,7 @@ func drawNode(node *gr.Node) {
 	} else {
 		color = GraphColor
 	}
-	node.Radius = radius+LINE_THICKNESS
+	node.Radius = radius + LINE_THICKNESS
 	rl.DrawCircle(int32(position.X), int32(position.Y), radius+LINE_THICKNESS, color)
 
 	rl.DrawCircle(int32(position.X), int32(position.Y), radius, BackgroundColor)
@@ -322,7 +325,7 @@ func drawArrow(a, b rl.Vector2, h, w float32) {
 
 	rl.DrawLineEx(getScreenPos(a), getScreenPos(b_), LINE_THICKNESS, GraphColor)
 
-	width := rl.Vector2Rotate(dir, -90 * (math.Pi / 180))
+	width := rl.Vector2Rotate(dir, -90*(math.Pi/180))
 	width = rl.Vector2Scale(width, w)
 
 	x := rl.Vector2Add(b, width)
@@ -334,5 +337,29 @@ func drawArrow(a, b rl.Vector2, h, w float32) {
 	z = rl.Vector2Add(z, height)
 
 	rl.DrawTriangle(getScreenPos(x), getScreenPos(y), getScreenPos(z), GraphColor)
-	
+
+}
+
+func drawGrid() {
+
+	spacing := GridSpacing * Scale
+	ox := float32(int32(Offset.X / spacing))
+	oy := float32(int32(Offset.Y / spacing))
+
+	rl.TraceLog(rl.LogInfo, "ox %f oy %f", ox, oy)
+
+	for i := -GridGrain; i <= GridGrain; i++ {
+		rl.DrawLineV(
+			getScreenPos(rl.Vector2{X: float32(-GridGrain * (i + ox) * spacing), Y: float32((i + oy) * spacing)}),
+			getScreenPos(rl.Vector2{X: float32(GridGrain * (i + ox) * spacing), Y: float32((i + oy) * spacing)}),
+			rl.Gray,
+		)
+	}
+	for i := -GridGrain; i <= GridGrain; i++ {
+		rl.DrawLineV(
+			getScreenPos(rl.Vector2{X: float32((i + ox) * spacing), Y: float32(-GridGrain * spacing * (oy + i))}),
+			getScreenPos(rl.Vector2{X: float32((i + ox) * spacing), Y: float32(GridGrain * spacing * (oy + i))}),
+			rl.Gray,
+		)
+	}
 }
