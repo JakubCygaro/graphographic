@@ -164,18 +164,24 @@ func update() {
 		Scale += scrollY
 		Scale = rl.Clamp(Scale, SCALE_MINIMUM, 100)
 	}
+	if Mode == MODE_APPEND && NodeB != nil {
+		NodeB.Position = mousePos;
+	}
 }
 
 func draw() {
 	if NodeA != nil {
+		positionA := getScreenPos(NodeA.Position)
 		mousePos := rl.GetMousePosition()
-		position := getScreenPos(NodeA.Position)
 		rl.DrawLineEx(
 			mousePos,
-			position,
+			positionA,
 			LINE_THICKNESS,
 			GraphColor,
 		)
+		if Mode == MODE_APPEND && NodeB != nil {
+			drawNode(NodeB)
+		}
 	}
 	drawGraph()
 
@@ -215,22 +221,26 @@ func drawGraph() {
 	// draw nodes
 	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
 		node := nodeIt.Value.(*gr.Node)
-		radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
-		position := getScreenPos(node.Position)
-		textPosition := position
-		rl.DrawCircle(int32(position.X), int32(position.Y), radius+LINE_THICKNESS, GraphColor)
-		rl.DrawCircle(int32(position.X), int32(position.Y), radius, BackgroundColor)
-
-		size := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, FONT_SIZE*Scale, FONT_SPACING)
-		textPosition = rl.Vector2Subtract(textPosition, rl.Vector2Scale(size, 0.5))
-
-		rl.DrawTextEx(
-			rl.GetFontDefault(),
-			node.Contents,
-			textPosition,
-			FONT_SIZE*Scale,
-			FONT_SPACING,
-			rl.Red,
-		)
+		drawNode(node)
 	}
+}
+
+func drawNode(node *gr.Node){
+	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
+	position := getScreenPos(node.Position)
+	textPosition := position
+	rl.DrawCircle(int32(position.X), int32(position.Y), radius+LINE_THICKNESS, GraphColor)
+	rl.DrawCircle(int32(position.X), int32(position.Y), radius, BackgroundColor)
+
+	size := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, FONT_SIZE*Scale, FONT_SPACING)
+	textPosition = rl.Vector2Subtract(textPosition, rl.Vector2Scale(size, 0.5))
+
+	rl.DrawTextEx(
+		rl.GetFontDefault(),
+		node.Contents,
+		textPosition,
+		FONT_SIZE*Scale,
+		FONT_SPACING,
+		rl.Red,
+	)
 }
