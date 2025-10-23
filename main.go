@@ -2,6 +2,7 @@ package main
 
 import (
 	"container/list"
+	"fmt"
 	gr "graphographic/graph"
 	"math"
 
@@ -22,6 +23,7 @@ const (
 	MODE_CONNECT = iota
 	MODE_EDIT    = iota
 	MODE_MOVE    = iota
+	MODE_DELETE  = iota
 )
 
 var (
@@ -38,7 +40,7 @@ var (
 	NodeA             *gr.Node   = nil
 	NodeB             *gr.Node   = nil
 	Directed          bool       = false
-	GridGrain         float32    = 5
+	GridGrain         float32    = 8
 	GridSpacing       float32    = float32(Width) / GridGrain
 )
 
@@ -198,6 +200,8 @@ func update() {
 			NodeA = findNodeUnderMouse(rl.GetMousePosition())
 		case MODE_MOVE:
 			NodeA = nil
+		case MODE_DELETE:
+
 		}
 	}
 
@@ -231,7 +235,7 @@ func editModeTyping() {
 func draw() {
 	drawGrid()
 	if (Mode == MODE_CONNECT || Mode == MODE_APPEND) && NodeA != nil {
-		drawArrow(NodeA.Position, getMouseWorldPos(), 15, 10)
+		drawArrow(getScreenPos(NodeA.Position), rl.GetMousePosition(), 15, 10)
 		if Mode == MODE_APPEND && NodeB != nil {
 			drawNode(NodeB)
 		}
@@ -249,12 +253,24 @@ func draw() {
 		mode += "EDIT"
 	case MODE_MOVE:
 		mode += "MOVE"
+	case MODE_DELETE:
+		mode += "DELETE"
 	}
 	size := rl.MeasureTextEx(rl.GetFontDefault(), mode, FONT_SIZE, FONT_SPACING)
 	rl.DrawTextEx(
 		rl.GetFontDefault(),
 		mode,
 		rl.Vector2{X: 0, Y: float32(Height) - size.Y},
+		FONT_SIZE,
+		FONT_SPACING,
+		rl.Red,
+	)
+	scaleText := fmt.Sprintf("%.3fx", Scale)
+	size = rl.MeasureTextEx(rl.GetFontDefault(), scaleText, FONT_SIZE - 4, FONT_SPACING)
+	rl.DrawTextEx(
+		rl.GetFontDefault(),
+		scaleText,
+		rl.Vector2{X: 0, Y: 0},
 		FONT_SIZE,
 		FONT_SPACING,
 		rl.Red,
@@ -268,12 +284,15 @@ func drawGraph() {
 		tailPos := edge.Tail.Position
 		headPos := edge.Head.Position
 
+		tailPos = getScreenPos(tailPos)
+		headPos = getScreenPos(headPos)
+
 		dir := rl.Vector2Subtract(tailPos, headPos)
 		dir = rl.Vector2Normalize(dir)
 		dir = rl.Vector2Scale(dir, edge.Head.Radius)
 		headPos = rl.Vector2Add(headPos, dir)
 
-		drawArrow(tailPos, headPos, 15, 10)
+		drawArrow(tailPos, headPos, 15 * Scale, 10)
 	}
 	// draw nodes
 	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
@@ -323,7 +342,7 @@ func drawArrow(a, b rl.Vector2, h, w float32) {
 	height := rl.Vector2Scale(dir, h)
 	b_ := rl.Vector2Add(b, height)
 
-	rl.DrawLineEx(getScreenPos(a), getScreenPos(b_), LINE_THICKNESS, GraphColor)
+	rl.DrawLineEx((a), (b_), LINE_THICKNESS, GraphColor)
 
 	width := rl.Vector2Rotate(dir, -90*(math.Pi/180))
 	width = rl.Vector2Scale(width, w)
@@ -336,29 +355,44 @@ func drawArrow(a, b rl.Vector2, h, w float32) {
 	z := rl.Vector2Subtract(b, width)
 	z = rl.Vector2Add(z, height)
 
-	rl.DrawTriangle(getScreenPos(x), getScreenPos(y), getScreenPos(z), GraphColor)
+	rl.DrawTriangle((x), (y), (z), GraphColor)
 
 }
 
 func drawGrid() {
-
 	spacing := GridSpacing * Scale
-	ox := float32(int32(Offset.X / spacing))
-	oy := float32(int32(Offset.Y / spacing))
 
-	rl.TraceLog(rl.LogInfo, "ox %f oy %f", ox, oy)
+	gridCenter := rl.Vector2 {
+		X : float32(Width / 2.),
+		Y: float32(Height / 2.),
+	}
 
+	fmt.Println(gridCenter)
+
+	// Y axis
 	for i := -GridGrain; i <= GridGrain; i++ {
 		rl.DrawLineV(
-			getScreenPos(rl.Vector2{X: float32(-GridGrain * (i + ox) * spacing), Y: float32((i + oy) * spacing)}),
-			getScreenPos(rl.Vector2{X: float32(GridGrain * (i + ox) * spacing), Y: float32((i + oy) * spacing)}),
+			rl.Vector2{
+				X: 0,
+				Y: gridCenter.Y + i * spacing,
+			},
+			rl.Vector2{
+				X: float32(Width),
+				Y: gridCenter.Y + i * spacing,
+			},
 			rl.Gray,
 		)
 	}
 	for i := -GridGrain; i <= GridGrain; i++ {
 		rl.DrawLineV(
-			getScreenPos(rl.Vector2{X: float32((i + ox) * spacing), Y: float32(-GridGrain * spacing * (oy + i))}),
-			getScreenPos(rl.Vector2{X: float32((i + ox) * spacing), Y: float32(GridGrain * spacing * (oy + i))}),
+			rl.Vector2{
+				X: gridCenter.X + i * spacing,
+				Y: 0,
+			},
+			rl.Vector2{
+				X: gridCenter.X + i * spacing,
+				Y: float32(Height),
+			},
 			rl.Gray,
 		)
 	}

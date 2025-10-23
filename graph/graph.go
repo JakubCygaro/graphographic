@@ -41,6 +41,14 @@ func (g *Graph) AddEdge(a, b *Node) *Edge {
 	b.Edges.PushBack(aToB)
 	return aToB
 }
+func (g *Graph) RemoveNode(n *Node) {
+	for edgeIt := n.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+		edge := edgeIt.Value.(*Edge)
+		if edge.Tail != n {
+			// edge.Tail.Edges.Remove(edge)
+		}
+	}
+}
 
 func NewNode() Node {
 	return Node {
