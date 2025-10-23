@@ -2,6 +2,7 @@ package graph
 
 import (
 	"container/list"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -41,13 +42,42 @@ func (g *Graph) AddEdge(a, b *Node) *Edge {
 	b.Edges.PushBack(aToB)
 	return aToB
 }
-func (g *Graph) RemoveNode(n *Node) {
-	for edgeIt := n.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+
+func (node *Node) removeEdgeToNode(other *Node) {
+	edgesToRemove := make([]*list.Element, 0)
+	for edgeIt := node.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 		edge := edgeIt.Value.(*Edge)
-		if edge.Tail != n {
-			// edge.Tail.Edges.Remove(edge)
+		if edge.Tail == other || edge.Head == other {
+			edgesToRemove = append(edgesToRemove, edgeIt)
 		}
 	}
+	for _, e := range edgesToRemove {
+		node.Edges.Remove(e)
+	}
+}
+
+func (g *Graph) RemoveNode(n *Node) {
+	edgesToRemove := make([]*list.Element, 0)
+	for edgeIt := g.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+		edge := edgeIt.Value.(*Edge)
+		if edge.Tail == n || edge.Head == n {
+			edgesToRemove = append(edgesToRemove, edgeIt)
+			edge.Tail.removeEdgeToNode(n)
+			edge.Head.removeEdgeToNode(n)
+		}
+	}
+	for _, e := range edgesToRemove {
+		g.Edges.Remove(e)
+	}
+
+	for nodeIt := g.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
+		node := nodeIt.Value.(*Node)
+		if node == n {
+			g.Nodes.Remove(nodeIt)
+			break;
+		}
+	}
+	
 }
 
 func NewNode() Node {

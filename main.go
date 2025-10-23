@@ -118,7 +118,7 @@ func update() {
 		editModeTyping()
 	} else {
 		if rl.IsKeyReleased(rl.KeyS) {
-			Mode = wrap(Mode+1, int32(MODE_PLACE), int32(MODE_MOVE))
+			Mode = wrap(Mode+1, int32(MODE_PLACE), int32(MODE_DELETE))
 		}
 		if rl.IsKeyReleased(rl.KeyE) {
 			Mode = MODE_EDIT
@@ -134,6 +134,9 @@ func update() {
 		}
 		if rl.IsKeyReleased(rl.KeyC) {
 			Mode = MODE_CONNECT
+		}
+		if rl.IsKeyReleased(rl.KeyD) {
+			Mode = MODE_DELETE
 		}
 	}
 	if rl.IsKeyReleased(rl.KeyEscape) {
@@ -201,7 +204,10 @@ func update() {
 		case MODE_MOVE:
 			NodeA = nil
 		case MODE_DELETE:
-
+			toDelete := findNodeUnderMouse(rl.GetMousePosition())
+			if toDelete != nil {
+				Graph.RemoveNode(toDelete)
+			}
 		}
 	}
 
