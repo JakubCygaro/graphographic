@@ -111,6 +111,7 @@ func findNodeUnderMouse(mousePos rl.Vector2) *gr.Node {
 func findEdgeUnderMouse(mousePos rl.Vector2) *gr.Edge {
 	distFromLine := func (p_1, p_2, x rl.Vector2) float32 {
 		numerator := ( p_2.Y - p_1.Y ) * x.X - ( p_2.X - p_1.X ) * x.Y + p_2.X * p_1.Y - p_2.Y * p_1.X
+		numerator = float32(math.Abs(float64(numerator)))
 		denominator := rl.Vector2Distance(p_1, p_2)
 		return numerator / denominator
 	}
@@ -119,6 +120,7 @@ func findEdgeUnderMouse(mousePos rl.Vector2) *gr.Edge {
 	for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 		edge := edgeIt.Value.(*gr.Edge)
 		dist := distFromLine(edge.StartPos, edge.EndPos, mousePos)
+		// fmt.Println("distance: ", dist)
 		if dist < 10 {
 			return edge
 		}
@@ -347,7 +349,6 @@ func drawEdge(edge *gr.Edge) {
 	textPos = rl.Vector2Add(textPos, rl.Vector2Scale(rl.Vector2Rotate(rl.Vector2Normalize(halfWay), 90 * math.Pi / 180), -20))
 
 	rot := rl.Vector2Angle(rl.Vector2Normalize(halfWay), rl.Vector2 { X: 1, Y: 0 })
-	fmt.Println(-(rot / ( math.Pi / 180 )))
 	rl.DrawTextPro(
 		rl.GetFontDefault(),
 		costText,
