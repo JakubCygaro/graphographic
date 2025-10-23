@@ -12,7 +12,7 @@ import (
 
 const (
 	FONT_SIZE      = 24
-	FONT_SPACING   = 10
+	FONT_SPACING   = 6
 	SCALE_MINIMUM  = 10. / float32(FONT_SIZE)
 	LINE_THICKNESS = 4.0
 	TARGET_FPS     = 60
@@ -314,7 +314,28 @@ func drawEdge(edge *gr.Edge) {
 	dir = rl.Vector2Rotate(dir, -10 * (math.Pi / 180))
 	tailPos = rl.Vector2Add(tailPos, dir)
 
+	dir = rl.Vector2Subtract(headPos, tailPos)
+	halfWay := rl.Vector2Scale(dir, 0.5)
+
 	drawArrow(tailPos, headPos, 15*Scale, 10)
+
+	textPos := rl.Vector2Add(tailPos, halfWay)
+	costText := fmt.Sprintf("Cost: %d", edge.Cost)
+	size := rl.MeasureTextEx(rl.GetFontDefault(), costText, (FONT_SIZE - 8) * Scale, FONT_SPACING)
+	textPos = rl.Vector2Add(textPos, rl.Vector2Scale(rl.Vector2Rotate(rl.Vector2Normalize(halfWay), 90 * math.Pi / 180), -20))
+
+	rot := rl.Vector2Angle(rl.Vector2Normalize(halfWay), rl.Vector2 { X: 1, Y: 0 })
+	fmt.Println(-(rot / ( math.Pi / 180 )))
+	rl.DrawTextPro(
+		rl.GetFontDefault(),
+		costText,
+		textPos,
+		rl.Vector2Scale(size, 0.5),
+		(-(rot / ( math.Pi / 180 )) ),
+		(FONT_SIZE - 8) * Scale,
+		FONT_SPACING,
+		rl.Red,
+	)
 
 }
 func drawNode(node *gr.Node) {
@@ -382,9 +403,6 @@ func drawGrid() {
 		X: float32(Width / 2.),
 		Y: float32(Height / 2.),
 	}
-
-	fmt.Println(gridCenter)
-
 	// Y axis
 	for i := -GridGrain; i <= GridGrain; i++ {
 		rl.DrawLineV(
@@ -399,6 +417,7 @@ func drawGrid() {
 			rl.Gray,
 		)
 	}
+	// X axis
 	for i := -GridGrain; i <= GridGrain; i++ {
 		rl.DrawLineV(
 			rl.Vector2{
