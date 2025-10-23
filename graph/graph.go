@@ -17,6 +17,7 @@ type Node struct {
 type Edge struct {
 	Tail *Node
 	Head *Node
+	Cost int32
 }
 
 type Graph struct {

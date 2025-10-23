@@ -272,7 +272,7 @@ func draw() {
 		rl.Red,
 	)
 	scaleText := fmt.Sprintf("%.3fx", Scale)
-	size = rl.MeasureTextEx(rl.GetFontDefault(), scaleText, FONT_SIZE - 4, FONT_SPACING)
+	size = rl.MeasureTextEx(rl.GetFontDefault(), scaleText, FONT_SIZE-4, FONT_SPACING)
 	rl.DrawTextEx(
 		rl.GetFontDefault(),
 		scaleText,
@@ -287,18 +287,7 @@ func drawGraph() {
 	// draw edges
 	for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 		edge := edgeIt.Value.(*gr.Edge)
-		tailPos := edge.Tail.Position
-		headPos := edge.Head.Position
-
-		tailPos = getScreenPos(tailPos)
-		headPos = getScreenPos(headPos)
-
-		dir := rl.Vector2Subtract(tailPos, headPos)
-		dir = rl.Vector2Normalize(dir)
-		dir = rl.Vector2Scale(dir, edge.Head.Radius)
-		headPos = rl.Vector2Add(headPos, dir)
-
-		drawArrow(tailPos, headPos, 15 * Scale, 10)
+		drawEdge(edge)
 	}
 	// draw nodes
 	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
@@ -306,7 +295,28 @@ func drawGraph() {
 		drawNode(node)
 	}
 }
+func drawEdge(edge *gr.Edge) {
+	tailPos := edge.Tail.Position
+	headPos := edge.Head.Position
 
+	tailPos = getScreenPos(tailPos)
+	headPos = getScreenPos(headPos)
+
+	dir := rl.Vector2Subtract(tailPos, headPos)
+	dir = rl.Vector2Normalize(dir)
+	dir = rl.Vector2Scale(dir, edge.Head.Radius)
+	dir = rl.Vector2Rotate(dir, 10 * (math.Pi / 180))
+	headPos = rl.Vector2Add(headPos, dir)
+
+	dir = rl.Vector2Subtract(headPos, tailPos)
+	dir = rl.Vector2Normalize(dir)
+	dir = rl.Vector2Scale(dir, edge.Tail.Radius)
+	dir = rl.Vector2Rotate(dir, -10 * (math.Pi / 180))
+	tailPos = rl.Vector2Add(tailPos, dir)
+
+	drawArrow(tailPos, headPos, 15*Scale, 10)
+
+}
 func drawNode(node *gr.Node) {
 	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
 	radius *= 1.2
@@ -368,8 +378,8 @@ func drawArrow(a, b rl.Vector2, h, w float32) {
 func drawGrid() {
 	spacing := GridSpacing * Scale
 
-	gridCenter := rl.Vector2 {
-		X : float32(Width / 2.),
+	gridCenter := rl.Vector2{
+		X: float32(Width / 2.),
 		Y: float32(Height / 2.),
 	}
 
@@ -380,11 +390,11 @@ func drawGrid() {
 		rl.DrawLineV(
 			rl.Vector2{
 				X: 0,
-				Y: gridCenter.Y + i * spacing,
+				Y: gridCenter.Y + i*spacing,
 			},
 			rl.Vector2{
 				X: float32(Width),
-				Y: gridCenter.Y + i * spacing,
+				Y: gridCenter.Y + i*spacing,
 			},
 			rl.Gray,
 		)
@@ -392,11 +402,11 @@ func drawGrid() {
 	for i := -GridGrain; i <= GridGrain; i++ {
 		rl.DrawLineV(
 			rl.Vector2{
-				X: gridCenter.X + i * spacing,
+				X: gridCenter.X + i*spacing,
 				Y: 0,
 			},
 			rl.Vector2{
-				X: gridCenter.X + i * spacing,
+				X: gridCenter.X + i*spacing,
 				Y: float32(Height),
 			},
 			rl.Gray,
