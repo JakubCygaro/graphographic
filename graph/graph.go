@@ -18,6 +18,8 @@ type Edge struct {
 	Tail *Node
 	Head *Node
 	Cost int32
+	// set after each draw pass so it does not have to be recalculated
+	StartPos, EndPos rl.Vector2
 }
 
 type Graph struct {
@@ -57,6 +59,15 @@ func (node *Node) removeEdgeToNode(other *Node) {
 	}
 }
 
+func (node *Node) removeEdge(e *Edge) {
+	for edgeIt := node.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+		edge := edgeIt.Value.(*Edge)
+		if edge == e {
+			node.Edges.Remove(edgeIt)
+		}
+	}
+}
+
 func (g *Graph) RemoveNode(n *Node) {
 	edgesToRemove := make([]*list.Element, 0)
 	for edgeIt := g.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
@@ -78,7 +89,17 @@ func (g *Graph) RemoveNode(n *Node) {
 			break;
 		}
 	}
-	
+}
+func (g *Graph) RemoveEdge(e *Edge) {
+	for edgeIt := g.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+		edge := edgeIt.Value.(*Edge)
+		if edge == e {
+			edge.Head.removeEdge(edge)
+			edge.Tail.removeEdge(edge)
+			g.Edges.Remove(edgeIt)
+			break
+		}
+	}
 }
 
 func NewNode() Node {

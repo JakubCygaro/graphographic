@@ -107,6 +107,24 @@ func findNodeUnderMouse(mousePos rl.Vector2) *gr.Node {
 	}
 	return ret
 }
+// mousePos must be in screen space, node positions will be transformed into screen space
+func findEdgeUnderMouse(mousePos rl.Vector2) *gr.Edge {
+	distFromLine := func (p_1, p_2, x rl.Vector2) float32 {
+		numerator := ( p_2.Y - p_1.Y ) * x.X - ( p_2.X - p_1.X ) * x.Y + p_2.X * p_1.Y - p_2.Y * p_1.X
+		denominator := rl.Vector2Distance(p_1, p_2)
+		return numerator / denominator
+	}
+
+	var ret *gr.Edge = nil
+	for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+		edge := edgeIt.Value.(*gr.Edge)
+		dist := distFromLine(edge.StartPos, edge.EndPos, mousePos)
+		if dist < 10 {
+			return edge
+		}
+	}
+	return ret
+}
 
 func update() {
 	if rl.IsWindowResized() {
@@ -204,9 +222,11 @@ func update() {
 		case MODE_MOVE:
 			NodeA = nil
 		case MODE_DELETE:
-			toDelete := findNodeUnderMouse(rl.GetMousePosition())
-			if toDelete != nil {
+			if toDelete := findNodeUnderMouse(rl.GetMousePosition()); toDelete != nil {
 				Graph.RemoveNode(toDelete)
+			}
+			if toDelete := findEdgeUnderMouse(rl.GetMousePosition()); toDelete != nil {
+				Graph.RemoveEdge(toDelete)
 			}
 		}
 	}
@@ -318,6 +338,8 @@ func drawEdge(edge *gr.Edge) {
 	halfWay := rl.Vector2Scale(dir, 0.5)
 
 	drawArrow(tailPos, headPos, 15*Scale, 10)
+	edge.StartPos = tailPos
+	edge.EndPos = headPos
 
 	textPos := rl.Vector2Add(tailPos, halfWay)
 	costText := fmt.Sprintf("Cost: %d", edge.Cost)
