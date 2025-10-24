@@ -6,6 +6,7 @@ import (
 	gr "graphographic/graph"
 	"math"
 	"strconv"
+	"unicode"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/exp/constraints"
@@ -224,9 +225,12 @@ func update() {
 			NodeA = nil
 			NodeB = nil
 		case MODE_EDIT:
+			EdgeA = nil; NodeA = nil
 			NodeA = findNodeUnderMouse(rl.GetMousePosition())
-			if EdgeA = findEdgeUnderMouse(rl.GetMousePosition()); NodeA == nil && EdgeA != nil {
-				SelectedEdgeScratch = fmt.Sprintf("%d", EdgeA.Cost)
+			if NodeA == nil {
+				if EdgeA = findEdgeUnderMouse(rl.GetMousePosition()); EdgeA != nil {
+					SelectedEdgeScratch = fmt.Sprintf("%d", EdgeA.Cost)
+				}
 			}
 		case MODE_MOVE:
 			NodeA = nil
@@ -278,7 +282,7 @@ func editModeTyping() {
 		r := rune(ch)
 		if selected := NodeA; selected != nil {
 			selected.Contents += string(r)
-		} else if selected := EdgeA; selected != nil {
+		} else if selected := EdgeA; selected != nil && (unicode.IsDigit(r) || r == '-'){
 			if SelectedEdgeScratch == "0" {
 				SelectedEdgeScratch = string(r)
 			} else if r == '-' {
