@@ -49,6 +49,8 @@ var (
 	GridGrain           float32    = 8
 	GridSpacing         float32    = float32(Width) / GridGrain
 	ActionHistory       []any      = make([]any, 0)
+	// mouse position in screen space
+	MousePos rl.Vector2
 )
 
 func clamp[T constraints.Ordered](value, min, max T) T {
@@ -87,7 +89,7 @@ func main() {
 
 // transforms mouse coordinates from screem space to world space
 func getMouseWorldPos() rl.Vector2 {
-	mousePos := rl.GetMousePosition()
+	mousePos := MousePos
 	mousePos = rl.Vector2Subtract(mousePos, Center)
 	mousePos = rl.Vector2Subtract(mousePos, Offset)
 	mousePos = rl.Vector2Scale(mousePos, 1/Scale)
@@ -103,38 +105,49 @@ func getScreenPos(position rl.Vector2) rl.Vector2 {
 }
 
 // mousePos must be in screen space, node positions will be transformed into screen space
-func findNodeUnderMouse(mousePos rl.Vector2) *gr.Node {
+func findNodeUnderMouse() *gr.Node {
 	var ret *gr.Node = nil
 	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
 		node := nodeIt.Value.(*gr.Node)
-		radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Content, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
-		if rl.Vector2Distance(getScreenPos(node.Position), mousePos) <= radius+LINE_THICKNESS {
+		if isNodeUnderMouse(node) {
 			return node
 		}
 	}
 	return ret
 }
+func isNodeUnderMouse(node *gr.Node) bool {
+	radius := node.Radius
+	return rl.Vector2Distance(getScreenPos(node.Position), MousePos) <= radius
+}
 
 // mousePos must be in screen space, node positions will be transformed into screen space
-func findEdgeUnderMouse(mousePos rl.Vector2) *gr.Edge {
-	distFromLine := func(p_1, p_2, x rl.Vector2) float32 {
-		numerator := (p_2.Y-p_1.Y)*x.X - (p_2.X-p_1.X)*x.Y + p_2.X*p_1.Y - p_2.Y*p_1.X
-		numerator = float32(math.Abs(float64(numerator)))
-		denominator := rl.Vector2Distance(p_1, p_2)
-		return numerator / denominator
-	}
-
+func findEdgeUnderMouse() *gr.Edge {
 	var ret *gr.Edge = nil
 	for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 		edge := edgeIt.Value.(*gr.Edge)
-		dist := distFromLine(edge.StartPos, edge.EndPos, mousePos)
-		// fmt.Println("distance: ", dist)
-		if dist < 10 {
+		if isEdgeUnderMouse(edge) {
 			return edge
 		}
 	}
 	return ret
 }
+func isEdgeUnderMouse(edge *gr.Edge) bool {
+	distFromLine := func(p_1, p_2, x rl.Vector2) float32 {
+		numerator := (p_2.Y-p_1.Y)*x.X - (p_2.X-p_1.X)*x.Y + p_2.X*p_1.Y - p_2.Y*p_1.X
+		numerator = float32(math.Abs(float64(numerator)))
+		denominator := rl.Vector2Distance(p_1, p_2)
+		res := numerator / denominator
+		rl.TraceLog(rl.LogInfo, "dist: %f", res)
+		return res
+	}
+	dir := rl.Vector2Subtract(edge.EndPos, edge.StartPos)
+	halfWay := rl.Vector2Scale(dir, 0.5)
+	center := rl.Vector2Add(edge.StartPos, halfWay)
+	distFromCenter := rl.Vector2Distance(center, MousePos)
+	return distFromLine(edge.StartPos, edge.EndPos, MousePos) < 10 && distFromCenter < rl.Vector2Length(halfWay) + 10
+}
+
+
 func revertLatestAction() {
 	if len(ActionHistory) == 0 {
 		return
@@ -159,11 +172,12 @@ func revertLatestAction() {
 }
 
 func update() {
+	MousePos = rl.GetMousePosition()
 	if rl.IsWindowResized() {
 		Width = rl.GetScreenWidth()
 		Height = rl.GetScreenHeight()
 	}
-	mousePos := getMouseWorldPos()
+	mousePosWorld := getMouseWorldPos()
 	if Mode == MODE_EDIT && NodeA != nil || EdgeA != nil {
 		editModeTyping()
 	} else {
@@ -202,11 +216,11 @@ func update() {
 		switch Mode {
 		case MODE_CONNECT:
 			if NodeA == nil {
-				NodeA = findNodeUnderMouse(rl.GetMousePosition())
+				NodeA = findNodeUnderMouse()
 			}
 		case MODE_APPEND:
 			if NodeA == nil {
-				NodeA = findNodeUnderMouse(rl.GetMousePosition())
+				NodeA = findNodeUnderMouse()
 			}
 			if NodeA != nil && NodeB == nil {
 				NodeB = &gr.Node{
@@ -217,7 +231,7 @@ func update() {
 			}
 		case MODE_MOVE:
 			if NodeA == nil {
-				NodeA = findNodeUnderMouse(rl.GetMousePosition())
+				NodeA = findNodeUnderMouse()
 			}
 			if NodeA != nil {
 				NodeA.Position = getMouseWorldPos()
@@ -229,14 +243,14 @@ func update() {
 		switch Mode {
 		case MODE_PLACE:
 			node := gr.NewNode()
-			node.Position = mousePos
+			node.Position = mousePosWorld
 			node.Content = "Node"
 			Graph.Nodes.PushBack(
 				&node,
 			)
 			ActionHistory = append(ActionHistory, &hist.AddNode{N: &node})
 		case MODE_CONNECT:
-			NodeB = findNodeUnderMouse(rl.GetMousePosition())
+			NodeB = findNodeUnderMouse()
 			if NodeA != nil && NodeB != nil && !NodeA.IsConnectedTo(NodeB) {
 				edge := Graph.AddEdge(NodeA, NodeB)
 				ActionHistory = append(ActionHistory, &hist.AddEdge{E: edge})
@@ -263,9 +277,9 @@ func update() {
 		case MODE_EDIT:
 			EdgeA = nil
 			NodeA = nil
-			NodeA = findNodeUnderMouse(rl.GetMousePosition())
+			NodeA = findNodeUnderMouse()
 			if NodeA == nil {
-				if EdgeA = findEdgeUnderMouse(rl.GetMousePosition()); EdgeA != nil {
+				if EdgeA = findEdgeUnderMouse(); EdgeA != nil {
 					ActionHistory = append(ActionHistory, &hist.EditEdgeCost{E: EdgeA, CostPreChange: EdgeA.Cost})
 					SelectedEdgeScratch = fmt.Sprintf("%d", EdgeA.Cost)
 				}
@@ -275,11 +289,11 @@ func update() {
 		case MODE_MOVE:
 			NodeA = nil
 		case MODE_DELETE:
-			if toDelete := findNodeUnderMouse(rl.GetMousePosition()); toDelete != nil {
+			if toDelete := findNodeUnderMouse(); toDelete != nil {
 				Graph.RemoveNode(toDelete)
 				ActionHistory = append(ActionHistory, &hist.RemoveNode{N: toDelete})
 			}
-			if toDelete := findEdgeUnderMouse(rl.GetMousePosition()); toDelete != nil {
+			if toDelete := findEdgeUnderMouse(); toDelete != nil {
 				Graph.RemoveEdge(toDelete)
 				ActionHistory = append(ActionHistory, &hist.RemoveEdge{E: toDelete})
 			}
@@ -297,7 +311,7 @@ func update() {
 		Scale = rl.Clamp(Scale, SCALE_MINIMUM, 100)
 	}
 	if Mode == MODE_APPEND && NodeB != nil {
-		NodeB.Position = mousePos
+		NodeB.Position = mousePosWorld
 	}
 	if len(ActionHistory) > ACTION_HISTORY_MAX_SIZE {
 		_, ActionHistory = ActionHistory[0], ActionHistory[1:]
@@ -348,7 +362,7 @@ func editModeTyping() {
 func draw() {
 	drawGrid()
 	if (Mode == MODE_CONNECT || Mode == MODE_APPEND) && NodeA != nil {
-		drawArrow(getScreenPos(NodeA.Position), rl.GetMousePosition(), 15, 10, GraphColor)
+		drawArrow(getScreenPos(NodeA.Position), MousePos, 15, 10, GraphColor)
 		if Mode == MODE_APPEND && NodeB != nil {
 			drawNode(NodeB)
 		}
@@ -433,6 +447,8 @@ func drawEdge(edge *gr.Edge) {
 	var color rl.Color
 	if edge == EdgeA && Mode == MODE_EDIT {
 		color = SelectedNodeColor
+	} else if Mode == MODE_DELETE && isEdgeUnderMouse(edge){
+		color = rl.Red
 	} else {
 		color = GraphColor
 	}
@@ -468,6 +484,8 @@ func drawNode(node *gr.Node) {
 	amISelected := (Mode == MODE_EDIT || Mode == MODE_MOVE) && node == NodeA
 	if amISelected {
 		color = SelectedNodeColor
+	} else if Mode == MODE_DELETE && isNodeUnderMouse(node){
+		color = rl.Red
 	} else {
 		color = GraphColor
 	}
