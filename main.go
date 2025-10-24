@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"fmt"
 	gr "graphographic/graph"
+	hist "graphographic/history"
 	"math"
 	"strconv"
 	"unicode"
@@ -13,11 +14,12 @@ import (
 )
 
 const (
-	FONT_SIZE      = 24
-	FONT_SPACING   = 6
-	SCALE_MINIMUM  = 10. / float32(FONT_SIZE)
-	LINE_THICKNESS = 4.0
-	TARGET_FPS     = 60
+	FONT_SIZE               = 24
+	FONT_SPACING            = 6
+	SCALE_MINIMUM           = 10. / float32(FONT_SIZE)
+	LINE_THICKNESS          = 4.0
+	TARGET_FPS              = 60
+	ACTION_HISTORY_MAX_SIZE = 40
 )
 const (
 	MODE_PLACE   = iota
@@ -46,6 +48,7 @@ var (
 	Directed            bool       = false
 	GridGrain           float32    = 8
 	GridSpacing         float32    = float32(Width) / GridGrain
+	ActionHistory       []any      = make([]any, 0)
 )
 
 func clamp[T constraints.Ordered](value, min, max T) T {
@@ -104,7 +107,7 @@ func findNodeUnderMouse(mousePos rl.Vector2) *gr.Node {
 	var ret *gr.Node = nil
 	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
 		node := nodeIt.Value.(*gr.Node)
-		radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
+		radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Content, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
 		if rl.Vector2Distance(getScreenPos(node.Position), mousePos) <= radius+LINE_THICKNESS {
 			return node
 		}
@@ -131,6 +134,28 @@ func findEdgeUnderMouse(mousePos rl.Vector2) *gr.Edge {
 		}
 	}
 	return ret
+}
+func revertLatestAction() {
+	if len(ActionHistory) == 0 {
+		return
+	}
+	latest := ActionHistory[len(ActionHistory)-1]
+	ActionHistory = ActionHistory[0 : len(ActionHistory)-1]
+	if addN, ok := latest.(*hist.AddNode); ok {
+		Graph.RemoveNode(addN.N)
+	} else if addE, ok := latest.(*hist.AddEdge); ok {
+		Graph.RemoveEdge(addE.E)
+	} else if remN, ok := latest.(*hist.RemoveNode); ok {
+		Graph.Nodes.PushBack(remN.N)
+	} else if remE, ok := latest.(*hist.RemoveEdge); ok {
+		Graph.Edges.PushBack(remE.E)
+		remE.E.Head.Edges.PushBack(remE.E)
+		remE.E.Tail.Edges.PushBack(remE.E)
+	} else if chE, ok := latest.(*hist.EditEdgeCost); ok {
+		chE.E.Cost = chE.CostPreChange
+	} else if chN, ok := latest.(*hist.EditNodeContent); ok {
+		chN.N.Content = chN.ContentPreChange
+	}
 }
 
 func update() {
@@ -160,8 +185,13 @@ func update() {
 		if rl.IsKeyReleased(rl.KeyC) {
 			Mode = MODE_CONNECT
 		}
-		if rl.IsKeyReleased(rl.KeyD) {
+		if rl.IsKeyReleased(rl.KeyD) && rl.IsKeyDown(rl.KeyLeftShift) {
+			Directed = !Directed
+		} else if rl.IsKeyReleased(rl.KeyD) {
 			Mode = MODE_DELETE
+		}
+		if rl.IsKeyReleased(rl.KeyBackspace) {
+			revertLatestAction()
 		}
 	}
 	if rl.IsKeyReleased(rl.KeyEscape) {
@@ -181,7 +211,7 @@ func update() {
 			if NodeA != nil && NodeB == nil {
 				NodeB = &gr.Node{
 					Position: NodeA.Position,
-					Contents: "Node",
+					Content:  "Node",
 					Edges:    list.New(),
 				}
 			}
@@ -200,16 +230,19 @@ func update() {
 		case MODE_PLACE:
 			node := gr.NewNode()
 			node.Position = mousePos
-			node.Contents = "Node"
+			node.Content = "Node"
 			Graph.Nodes.PushBack(
 				&node,
 			)
+			ActionHistory = append(ActionHistory, &hist.AddNode{N: &node})
 		case MODE_CONNECT:
 			NodeB = findNodeUnderMouse(rl.GetMousePosition())
 			if NodeA != nil && NodeB != nil && !NodeA.IsConnectedTo(NodeB) {
-				Graph.AddEdge(NodeA, NodeB)
+				edge := Graph.AddEdge(NodeA, NodeB)
+				ActionHistory = append(ActionHistory, &hist.AddEdge{E: edge})
 				if !Directed {
-					Graph.AddEdge(NodeB, NodeA)
+					edge := Graph.AddEdge(NodeB, NodeA)
+					ActionHistory = append(ActionHistory, &hist.AddEdge{E: edge})
 				}
 			}
 			NodeA = nil
@@ -217,29 +250,38 @@ func update() {
 		case MODE_APPEND:
 			if NodeA != nil && NodeB != nil {
 				Graph.Nodes.PushBack(NodeB)
-				Graph.AddEdge(NodeA, NodeB)
+				ActionHistory = append(ActionHistory, &hist.AddNode{N: NodeB})
+				edge := Graph.AddEdge(NodeA, NodeB)
+				ActionHistory = append(ActionHistory, &hist.AddEdge{E: edge})
 				if !Directed {
-					Graph.AddEdge(NodeB, NodeA)
+					edge := Graph.AddEdge(NodeB, NodeA)
+					ActionHistory = append(ActionHistory, &hist.AddEdge{E: edge})
 				}
 			}
 			NodeA = nil
 			NodeB = nil
 		case MODE_EDIT:
-			EdgeA = nil; NodeA = nil
+			EdgeA = nil
+			NodeA = nil
 			NodeA = findNodeUnderMouse(rl.GetMousePosition())
 			if NodeA == nil {
 				if EdgeA = findEdgeUnderMouse(rl.GetMousePosition()); EdgeA != nil {
+					ActionHistory = append(ActionHistory, &hist.EditEdgeCost{E: EdgeA, CostPreChange: EdgeA.Cost})
 					SelectedEdgeScratch = fmt.Sprintf("%d", EdgeA.Cost)
 				}
+			} else {
+				ActionHistory = append(ActionHistory, &hist.EditNodeContent{N: NodeA, ContentPreChange: NodeA.Content})
 			}
 		case MODE_MOVE:
 			NodeA = nil
 		case MODE_DELETE:
 			if toDelete := findNodeUnderMouse(rl.GetMousePosition()); toDelete != nil {
 				Graph.RemoveNode(toDelete)
+				ActionHistory = append(ActionHistory, &hist.RemoveNode{N: toDelete})
 			}
 			if toDelete := findEdgeUnderMouse(rl.GetMousePosition()); toDelete != nil {
 				Graph.RemoveEdge(toDelete)
+				ActionHistory = append(ActionHistory, &hist.RemoveEdge{E: toDelete})
 			}
 		}
 	}
@@ -257,13 +299,16 @@ func update() {
 	if Mode == MODE_APPEND && NodeB != nil {
 		NodeB.Position = mousePos
 	}
+	if len(ActionHistory) > ACTION_HISTORY_MAX_SIZE {
+		_, ActionHistory = ActionHistory[0], ActionHistory[1:]
+	}
 }
 
 func editModeTyping() {
 	if rl.IsKeyPressed(rl.KeyBackspace) {
 		if selected := NodeA; selected != nil {
-			end := clamp(len(selected.Contents)-1, 0, len(selected.Contents))
-			selected.Contents = selected.Contents[0:end]
+			end := clamp(len(selected.Content)-1, 0, len(selected.Content))
+			selected.Content = selected.Content[0:end]
 		} else if selected := EdgeA; selected != nil {
 			if len(SelectedEdgeScratch) == 1 {
 				SelectedEdgeScratch = "0"
@@ -281,8 +326,8 @@ func editModeTyping() {
 	for ch := rl.GetCharPressed(); ch != 0; ch = rl.GetCharPressed() {
 		r := rune(ch)
 		if selected := NodeA; selected != nil {
-			selected.Contents += string(r)
-		} else if selected := EdgeA; selected != nil && (unicode.IsDigit(r) || r == '-'){
+			selected.Content += string(r)
+		} else if selected := EdgeA; selected != nil && (unicode.IsDigit(r) || r == '-') {
 			if SelectedEdgeScratch == "0" {
 				SelectedEdgeScratch = string(r)
 			} else if r == '-' {
@@ -310,11 +355,17 @@ func draw() {
 	}
 	drawGraph()
 	var mode string = "Mode: "
+	var directed string
+	if Directed {
+		directed = "(DIRECTED)"
+	} else {
+		directed = "(UNDIRECTED)"
+	}
 	switch Mode {
 	case MODE_PLACE:
 		mode += "PLACE"
 	case MODE_CONNECT:
-		mode += "CONNECT"
+		mode += "CONNECT " + directed
 	case MODE_APPEND:
 		mode += "APPEND"
 	case MODE_EDIT:
@@ -409,7 +460,7 @@ func drawEdge(edge *gr.Edge) {
 
 }
 func drawNode(node *gr.Node) {
-	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
+	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Content, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
 	radius *= 1.2
 	position := getScreenPos(node.Position)
 	textPosition := position
@@ -425,8 +476,8 @@ func drawNode(node *gr.Node) {
 
 	rl.DrawCircle(int32(position.X), int32(position.Y), radius, BackgroundColor)
 
-	text := node.Contents
-	size := rl.MeasureTextEx(rl.GetFontDefault(), node.Contents, FONT_SIZE*Scale, FONT_SPACING-2)
+	text := node.Content
+	size := rl.MeasureTextEx(rl.GetFontDefault(), node.Content, FONT_SIZE*Scale, FONT_SPACING-2)
 	if size.X > 2*radius && !amISelected {
 		text = "..."
 		size = rl.MeasureTextEx(rl.GetFontDefault(), text, FONT_SIZE*Scale, FONT_SPACING-2)

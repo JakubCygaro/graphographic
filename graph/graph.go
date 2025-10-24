@@ -8,7 +8,7 @@ import (
 
 type Node struct {
 	Position rl.Vector2
-	Contents string
+	Content string
 	Edges *list.List
 	// saved from draw pass
 	Radius float32
@@ -105,7 +105,7 @@ func (g *Graph) RemoveEdge(e *Edge) {
 func NewNode() Node {
 	return Node {
 		Position: rl.Vector2Zero(),
-		Contents: "",
+		Content: "",
 		Edges: list.New(),
 	}
 }
