@@ -5,6 +5,7 @@ import (
 	"fmt"
 	gr "graphographic/graph"
 	"math"
+	"strconv"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/exp/constraints"
@@ -27,21 +28,23 @@ const (
 )
 
 var (
-	Width                        = 800
-	Height                       = 600
-	Graph                        = gr.New()
-	Scale             float32    = 1.0
-	Offset            rl.Vector2 = rl.Vector2Zero()
-	Center            rl.Vector2 = rl.Vector2Scale(rl.Vector2{X: float32(Width), Y: float32(Height)}, 0.5)
-	BackgroundColor              = rl.White
-	GraphColor                   = rl.Black
-	SelectedNodeColor            = rl.SkyBlue
-	Mode              int32      = MODE_PLACE
-	NodeA             *gr.Node   = nil
-	NodeB             *gr.Node   = nil
-	Directed          bool       = false
-	GridGrain         float32    = 8
-	GridSpacing       float32    = float32(Width) / GridGrain
+	Width                          = 800
+	Height                         = 600
+	Graph                          = gr.New()
+	Scale               float32    = 1.0
+	Offset              rl.Vector2 = rl.Vector2Zero()
+	Center              rl.Vector2 = rl.Vector2Scale(rl.Vector2{X: float32(Width), Y: float32(Height)}, 0.5)
+	BackgroundColor                = rl.White
+	GraphColor                     = rl.Black
+	SelectedNodeColor              = rl.SkyBlue
+	Mode                int32      = MODE_PLACE
+	NodeA               *gr.Node   = nil
+	NodeB               *gr.Node   = nil
+	EdgeA               *gr.Edge   = nil
+	SelectedEdgeScratch string     = ""
+	Directed            bool       = false
+	GridGrain           float32    = 8
+	GridSpacing         float32    = float32(Width) / GridGrain
 )
 
 func clamp[T constraints.Ordered](value, min, max T) T {
@@ -107,10 +110,11 @@ func findNodeUnderMouse(mousePos rl.Vector2) *gr.Node {
 	}
 	return ret
 }
+
 // mousePos must be in screen space, node positions will be transformed into screen space
 func findEdgeUnderMouse(mousePos rl.Vector2) *gr.Edge {
-	distFromLine := func (p_1, p_2, x rl.Vector2) float32 {
-		numerator := ( p_2.Y - p_1.Y ) * x.X - ( p_2.X - p_1.X ) * x.Y + p_2.X * p_1.Y - p_2.Y * p_1.X
+	distFromLine := func(p_1, p_2, x rl.Vector2) float32 {
+		numerator := (p_2.Y-p_1.Y)*x.X - (p_2.X-p_1.X)*x.Y + p_2.X*p_1.Y - p_2.Y*p_1.X
 		numerator = float32(math.Abs(float64(numerator)))
 		denominator := rl.Vector2Distance(p_1, p_2)
 		return numerator / denominator
@@ -134,7 +138,7 @@ func update() {
 		Height = rl.GetScreenHeight()
 	}
 	mousePos := getMouseWorldPos()
-	if Mode == MODE_EDIT && NodeA != nil {
+	if Mode == MODE_EDIT && NodeA != nil || EdgeA != nil {
 		editModeTyping()
 	} else {
 		if rl.IsKeyReleased(rl.KeyS) {
@@ -221,6 +225,9 @@ func update() {
 			NodeB = nil
 		case MODE_EDIT:
 			NodeA = findNodeUnderMouse(rl.GetMousePosition())
+			if EdgeA = findEdgeUnderMouse(rl.GetMousePosition()); NodeA == nil && EdgeA != nil {
+				SelectedEdgeScratch = fmt.Sprintf("%d", EdgeA.Cost)
+			}
 		case MODE_MOVE:
 			NodeA = nil
 		case MODE_DELETE:
@@ -249,21 +256,50 @@ func update() {
 }
 
 func editModeTyping() {
-	selected := NodeA
 	if rl.IsKeyPressed(rl.KeyBackspace) {
-		end := clamp(len(selected.Contents)-1, 0, len(selected.Contents))
-		selected.Contents = selected.Contents[0:end]
+		if selected := NodeA; selected != nil {
+			end := clamp(len(selected.Contents)-1, 0, len(selected.Contents))
+			selected.Contents = selected.Contents[0:end]
+		} else if selected := EdgeA; selected != nil {
+			if len(SelectedEdgeScratch) == 1 {
+				SelectedEdgeScratch = "0"
+			} else {
+				end := clamp(len(SelectedEdgeScratch)-1, 0, len(SelectedEdgeScratch))
+				SelectedEdgeScratch = SelectedEdgeScratch[0:end]
+			}
+			if d, err := strconv.Atoi(SelectedEdgeScratch); err == nil {
+				selected.Cost = int32(d)
+			} else {
+				SelectedEdgeScratch = fmt.Sprintf("%d", selected.Cost)
+			}
+		}
 	}
 	for ch := rl.GetCharPressed(); ch != 0; ch = rl.GetCharPressed() {
 		r := rune(ch)
-		selected.Contents += string(r)
+		if selected := NodeA; selected != nil {
+			selected.Contents += string(r)
+		} else if selected := EdgeA; selected != nil {
+			if SelectedEdgeScratch == "0" {
+				SelectedEdgeScratch = string(r)
+			} else if r == '-' {
+				SelectedEdgeScratch = strconv.Itoa(int(-selected.Cost))
+			} else {
+				SelectedEdgeScratch += string(r)
+			}
+
+			if d, err := strconv.Atoi(SelectedEdgeScratch); err == nil {
+				selected.Cost = int32(d)
+			} else {
+				SelectedEdgeScratch = fmt.Sprintf("%d", selected.Cost)
+			}
+		}
 	}
 }
 
 func draw() {
 	drawGrid()
 	if (Mode == MODE_CONNECT || Mode == MODE_APPEND) && NodeA != nil {
-		drawArrow(getScreenPos(NodeA.Position), rl.GetMousePosition(), 15, 10)
+		drawArrow(getScreenPos(NodeA.Position), rl.GetMousePosition(), 15, 10, GraphColor)
 		if Mode == MODE_APPEND && NodeB != nil {
 			drawNode(NodeB)
 		}
@@ -327,35 +363,42 @@ func drawEdge(edge *gr.Edge) {
 	dir := rl.Vector2Subtract(tailPos, headPos)
 	dir = rl.Vector2Normalize(dir)
 	dir = rl.Vector2Scale(dir, edge.Head.Radius)
-	dir = rl.Vector2Rotate(dir, 10 * (math.Pi / 180))
+	dir = rl.Vector2Rotate(dir, 10*(math.Pi/180))
 	headPos = rl.Vector2Add(headPos, dir)
 
 	dir = rl.Vector2Subtract(headPos, tailPos)
 	dir = rl.Vector2Normalize(dir)
 	dir = rl.Vector2Scale(dir, edge.Tail.Radius)
-	dir = rl.Vector2Rotate(dir, -10 * (math.Pi / 180))
+	dir = rl.Vector2Rotate(dir, -10*(math.Pi/180))
 	tailPos = rl.Vector2Add(tailPos, dir)
 
 	dir = rl.Vector2Subtract(headPos, tailPos)
 	halfWay := rl.Vector2Scale(dir, 0.5)
 
-	drawArrow(tailPos, headPos, 15*Scale, 10)
+	var color rl.Color
+	if edge == EdgeA && Mode == MODE_EDIT {
+		color = SelectedNodeColor
+	} else {
+		color = GraphColor
+	}
+
+	drawArrow(tailPos, headPos, 15*Scale, 10, color)
 	edge.StartPos = tailPos
 	edge.EndPos = headPos
 
 	textPos := rl.Vector2Add(tailPos, halfWay)
 	costText := fmt.Sprintf("Cost: %d", edge.Cost)
-	size := rl.MeasureTextEx(rl.GetFontDefault(), costText, (FONT_SIZE - 8) * Scale, FONT_SPACING)
-	textPos = rl.Vector2Add(textPos, rl.Vector2Scale(rl.Vector2Rotate(rl.Vector2Normalize(halfWay), 90 * math.Pi / 180), -20))
+	size := rl.MeasureTextEx(rl.GetFontDefault(), costText, (FONT_SIZE-8)*Scale, FONT_SPACING)
+	textPos = rl.Vector2Add(textPos, rl.Vector2Scale(rl.Vector2Rotate(rl.Vector2Normalize(halfWay), 90*math.Pi/180), -20))
 
-	rot := rl.Vector2Angle(rl.Vector2Normalize(halfWay), rl.Vector2 { X: 1, Y: 0 })
+	rot := rl.Vector2Angle(rl.Vector2Normalize(halfWay), rl.Vector2{X: 1, Y: 0})
 	rl.DrawTextPro(
 		rl.GetFontDefault(),
 		costText,
 		textPos,
 		rl.Vector2Scale(size, 0.5),
-		(-(rot / ( math.Pi / 180 )) ),
-		(FONT_SIZE - 8) * Scale,
+		(-(rot / (math.Pi / 180))),
+		(FONT_SIZE-8)*Scale,
 		FONT_SPACING,
 		rl.Red,
 	)
@@ -396,13 +439,13 @@ func drawNode(node *gr.Node) {
 	)
 }
 
-func drawArrow(a, b rl.Vector2, h, w float32) {
+func drawArrow(a, b rl.Vector2, h, w float32, color rl.Color) {
 	dir := rl.Vector2Subtract(a, b)
 	dir = rl.Vector2Normalize(dir)
 	height := rl.Vector2Scale(dir, h)
 	b_ := rl.Vector2Add(b, height)
 
-	rl.DrawLineEx((a), (b_), LINE_THICKNESS, GraphColor)
+	rl.DrawLineEx((a), (b_), LINE_THICKNESS, color)
 
 	width := rl.Vector2Rotate(dir, -90*(math.Pi/180))
 	width = rl.Vector2Scale(width, w)
@@ -415,7 +458,7 @@ func drawArrow(a, b rl.Vector2, h, w float32) {
 	z := rl.Vector2Subtract(b, width)
 	z = rl.Vector2Add(z, height)
 
-	rl.DrawTriangle((x), (y), (z), GraphColor)
+	rl.DrawTriangle((x), (y), (z), color)
 
 }
 
