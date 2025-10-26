@@ -3,6 +3,7 @@ package main
 import (
 	"container/list"
 	"fmt"
+	algo "graphographic/algorithm"
 	gr "graphographic/graph"
 	hist "graphographic/history"
 	"math"
@@ -20,14 +21,16 @@ const (
 	LINE_THICKNESS          = 4.0
 	TARGET_FPS              = 60
 	ACTION_HISTORY_MAX_SIZE = 40
+	MIN_RADIUS              = 10
 )
 const (
-	MODE_PLACE   = iota
-	MODE_APPEND  = iota
-	MODE_CONNECT = iota
-	MODE_EDIT    = iota
-	MODE_MOVE    = iota
-	MODE_DELETE  = iota
+	MODE_PLACE     = iota
+	MODE_APPEND    = iota
+	MODE_CONNECT   = iota
+	MODE_EDIT      = iota
+	MODE_MOVE      = iota
+	MODE_ALGORITHM = iota
+	MODE_DELETE    = iota
 )
 
 var (
@@ -50,7 +53,14 @@ var (
 	GridSpacing         float32    = float32(Width) / GridGrain
 	ActionHistory       []any      = make([]any, 0)
 	// mouse position in screen space
-	MousePos rl.Vector2
+	MousePos             rl.Vector2
+	Algorithms           []algo.Algorithm = make([]algo.Algorithm, 0)
+	CurrentAlgorithm     int              = 0
+	CurrentAlgorithmName string           = "unnamed"
+	IsAlgorithmRunning   bool             = false
+	AlgorithmSpeed int = 30
+
+	UpdateCounter uint64 = 0
 )
 
 func clamp[T constraints.Ordered](value, min, max T) T {
@@ -77,6 +87,9 @@ func main() {
 	rl.SetConfigFlags(rl.FlagWindowResizable)
 	rl.InitWindow(int32(Width), int32(Height), "Graphographic")
 	rl.SetTargetFPS(TARGET_FPS)
+	initGraph()
+	loadAlgorithms()
+	spreadNodes()
 	for !rl.WindowShouldClose() {
 		rl.BeginDrawing()
 		rl.ClearBackground(BackgroundColor)
@@ -85,6 +98,87 @@ func main() {
 		rl.EndDrawing()
 	}
 	rl.CloseWindow()
+}
+
+func initGraph() {
+	node := gr.NewNode()
+	node.Content = "Node A"
+	a := Graph.AddNode(node)
+	node.Content = "Node B"
+	b := Graph.AddNode(node)
+	Graph.AddEdge(a, b).Cost = 10
+	Graph.AddEdge(b, a).Cost = 4
+	node.Content = "Node C"
+	c := Graph.AddNode(node)
+	Graph.AddEdge(a, c).Cost = 3
+	node.Content = "Node D"
+	d := Graph.AddNode(node)
+	Graph.AddEdge(c, d).Cost = 12
+	node.Content = "Node F"
+	f := Graph.AddNode(node)
+	Graph.AddEdge(c, f).Cost = 8
+	Graph.AddEdge(d, b).Cost = 7
+}
+
+func loadAlgorithms() {
+	dfs := &algo.DFS{}
+	Algorithms = append(Algorithms, dfs)
+	bfs := &algo.BFS{}
+	Algorithms = append(Algorithms, bfs)
+
+	CurrentAlgorithmName = Algorithms[CurrentAlgorithm].GetName()
+}
+
+func spreadNodes() {
+	type pair struct {
+		n        *gr.Node
+		displace rl.Vector2
+	}
+	nodes := make([]pair, 0)
+	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
+		node := nodeIt.Value.(*gr.Node)
+		node.Radius = calculateNodeRadius(node)
+		nodes = append(nodes, pair{
+			n:        node,
+			displace: rl.Vector2Zero(),
+		})
+	}
+	i := 10
+	for hadOverlap := true; hadOverlap; {
+		i--
+		hadOverlap = false
+		for i := 0; i < len(nodes); i++ {
+			for j := i + 1; j < len(nodes); j++ {
+				a, b := &nodes[i], &nodes[j]
+				if rl.Vector2Distance(a.n.Position, b.n.Position) <= a.n.Radius+b.n.Radius {
+					hadOverlap = true
+					dir := rl.Vector2Subtract(
+						a.n.Position,
+						b.n.Position,
+					)
+					if dir == rl.Vector2Zero() {
+						dir = rl.Vector2{X: 1, Y: 0}
+						dir = rl.Vector2Rotate(dir, float32(i)/float32(len(nodes))*180./math.Pi)
+					}
+					dir = rl.Vector2Scale(dir, a.n.Radius*2)
+					a.displace = rl.Vector2Add(
+						a.displace,
+						dir,
+					)
+					b.displace = rl.Vector2Add(
+						a.displace,
+						rl.Vector2Scale(dir, -2),
+					)
+				}
+			}
+			a := &nodes[i]
+			a.n.Position = rl.Vector2Add(
+				a.n.Position,
+				a.displace,
+			)
+			a.displace = rl.Vector2Zero()
+		}
+	}
 }
 
 // transforms mouse coordinates from screem space to world space
@@ -137,16 +231,14 @@ func isEdgeUnderMouse(edge *gr.Edge) bool {
 		numerator = float32(math.Abs(float64(numerator)))
 		denominator := rl.Vector2Distance(p_1, p_2)
 		res := numerator / denominator
-		rl.TraceLog(rl.LogInfo, "dist: %f", res)
 		return res
 	}
 	dir := rl.Vector2Subtract(edge.EndPos, edge.StartPos)
 	halfWay := rl.Vector2Scale(dir, 0.5)
 	center := rl.Vector2Add(edge.StartPos, halfWay)
 	distFromCenter := rl.Vector2Distance(center, MousePos)
-	return distFromLine(edge.StartPos, edge.EndPos, MousePos) < 10 && distFromCenter < rl.Vector2Length(halfWay) + 10
+	return distFromLine(edge.StartPos, edge.EndPos, MousePos) < 10 && distFromCenter < rl.Vector2Length(halfWay)+10
 }
-
 
 func revertLatestAction() {
 	if len(ActionHistory) == 0 {
@@ -168,22 +260,28 @@ func revertLatestAction() {
 		chE.E.Cost = chE.CostPreChange
 	} else if chN, ok := latest.(*hist.EditNodeContent); ok {
 		chN.N.Content = chN.ContentPreChange
+	} else if chN, ok := latest.(*hist.MoveNode); ok {
+		chN.N.Position = chN.PosPreChange
 	}
+
 }
 
 func update() {
 	MousePos = rl.GetMousePosition()
+	UpdateCounter++
+	mousePosWorld := getMouseWorldPos()
+
+	if IsAlgorithmRunning && UpdateCounter%uint64(AlgorithmSpeed) == 0 {
+		IsAlgorithmRunning = Algorithms[CurrentAlgorithm].Update()
+	}
+
 	if rl.IsWindowResized() {
 		Width = rl.GetScreenWidth()
 		Height = rl.GetScreenHeight()
 	}
-	mousePosWorld := getMouseWorldPos()
 	if Mode == MODE_EDIT && NodeA != nil || EdgeA != nil {
 		editModeTyping()
 	} else {
-		if rl.IsKeyReleased(rl.KeyS) {
-			Mode = wrap(Mode+1, int32(MODE_PLACE), int32(MODE_DELETE))
-		}
 		if rl.IsKeyReleased(rl.KeyE) {
 			Mode = MODE_EDIT
 		}
@@ -192,6 +290,9 @@ func update() {
 		}
 		if rl.IsKeyReleased(rl.KeyA) {
 			Mode = MODE_APPEND
+		}
+		if rl.IsKeyReleased(rl.KeyT) {
+			Mode = MODE_ALGORITHM
 		}
 		if rl.IsKeyReleased(rl.KeyP) {
 			Mode = MODE_PLACE
@@ -206,6 +307,27 @@ func update() {
 		}
 		if rl.IsKeyReleased(rl.KeyBackspace) {
 			revertLatestAction()
+		}
+		if rl.IsKeyReleased(rl.KeyS) {
+			CurrentAlgorithm = wrap(CurrentAlgorithm+1, 0, len(Algorithms)-1)
+			Algorithms[CurrentAlgorithm].Init()
+			CurrentAlgorithmName = Algorithms[CurrentAlgorithm].GetName()
+		}
+		if rl.IsKeyReleased(rl.KeyR) {
+			for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
+				n := nodeIt.Value.(*gr.Node)
+				n.Data = gr.AlgoData{}
+			}
+			for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+				e := edgeIt.Value.(*gr.Edge)
+				e.Data = gr.AlgoData{}
+			}
+			if err := Algorithms[CurrentAlgorithm].Start(&Graph); err != nil {
+				rl.TraceLog(rl.LogWarning, "%s", err.Error())
+				IsAlgorithmRunning = false
+			} else {
+				IsAlgorithmRunning = true
+			}
 		}
 	}
 	if rl.IsKeyReleased(rl.KeyEscape) {
@@ -232,6 +354,9 @@ func update() {
 		case MODE_MOVE:
 			if NodeA == nil {
 				NodeA = findNodeUnderMouse()
+				if NodeA != nil {
+					ActionHistory = append(ActionHistory, &hist.MoveNode{ N: NodeA, PosPreChange: NodeA.Position })
+				}
 			}
 			if NodeA != nil {
 				NodeA.Position = getMouseWorldPos()
@@ -288,6 +413,8 @@ func update() {
 			}
 		case MODE_MOVE:
 			NodeA = nil
+		case MODE_ALGORITHM:
+			Algorithms[CurrentAlgorithm].NodeSelected(findNodeUnderMouse())
 		case MODE_DELETE:
 			if toDelete := findNodeUnderMouse(); toDelete != nil {
 				Graph.RemoveNode(toDelete)
@@ -388,6 +515,8 @@ func draw() {
 		mode += "MOVE"
 	case MODE_DELETE:
 		mode += "DELETE"
+	case MODE_ALGORITHM:
+		mode += "ALGORITHM"
 	}
 	size := rl.MeasureTextEx(rl.GetFontDefault(), mode, FONT_SIZE, FONT_SPACING)
 	rl.DrawTextEx(
@@ -405,6 +534,16 @@ func draw() {
 		scaleText,
 		rl.Vector2{X: 0, Y: 0},
 		FONT_SIZE,
+		FONT_SPACING,
+		rl.Red,
+	)
+	algoName := "Algorithm: " + CurrentAlgorithmName
+	size = rl.MeasureTextEx(rl.GetFontDefault(), algoName, FONT_SIZE-4, FONT_SPACING)
+	rl.DrawTextEx(
+		rl.GetFontDefault(),
+		algoName,
+		rl.Vector2{X: float32(Width) - size.X , Y: 0},
+		FONT_SIZE - 4,
 		FONT_SPACING,
 		rl.Red,
 	)
@@ -445,9 +584,14 @@ func drawEdge(edge *gr.Edge) {
 	halfWay := rl.Vector2Scale(dir, 0.5)
 
 	var color rl.Color
-	if edge == EdgeA && Mode == MODE_EDIT {
+	
+	if edge.Data.Highlighted && Mode == MODE_ALGORITHM {
 		color = SelectedNodeColor
-	} else if Mode == MODE_DELETE && isEdgeUnderMouse(edge){
+	} else if edge.Data.Explored && Mode == MODE_ALGORITHM {
+		color = rl.Green
+	}else if edge == EdgeA && Mode == MODE_EDIT {
+		color = SelectedNodeColor
+	} else if Mode == MODE_DELETE && isEdgeUnderMouse(edge) {
 		color = rl.Red
 	} else {
 		color = GraphColor
@@ -475,16 +619,21 @@ func drawEdge(edge *gr.Edge) {
 	)
 
 }
+
 func drawNode(node *gr.Node) {
-	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Content, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
+	radius := calculateNodeRadius(node)
 	radius *= 1.2
 	position := getScreenPos(node.Position)
 	textPosition := position
 	var color rl.Color
 	amISelected := (Mode == MODE_EDIT || Mode == MODE_MOVE) && node == NodeA
-	if amISelected {
+	if node.Data.Highlighted && Mode == MODE_ALGORITHM {
 		color = SelectedNodeColor
-	} else if Mode == MODE_DELETE && isNodeUnderMouse(node){
+	} else if node.Data.Explored && Mode == MODE_ALGORITHM {
+		color = rl.Green
+	} else if amISelected {
+		color = SelectedNodeColor
+	} else if Mode == MODE_DELETE && isNodeUnderMouse(node) {
 		color = rl.Red
 	} else {
 		color = GraphColor
@@ -511,7 +660,11 @@ func drawNode(node *gr.Node) {
 		rl.Red,
 	)
 }
-
+func calculateNodeRadius(node *gr.Node) float32 {
+	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Content, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale
+	radius = float32(math.Max(float64(radius), MIN_RADIUS))
+	return radius
+}
 func drawArrow(a, b rl.Vector2, h, w float32, color rl.Color) {
 	dir := rl.Vector2Subtract(a, b)
 	dir = rl.Vector2Normalize(dir)

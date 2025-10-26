@@ -6,12 +6,20 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+type AlgoData struct {
+	Explored bool
+	Highlighted bool
+	// extra data that could be assigned and used by an algorithm
+	Custom *any
+}
+
 type Node struct {
 	Position rl.Vector2
 	Content string
 	Edges *list.List
 	// saved from draw pass
 	Radius float32
+	Data AlgoData
 }
 
 type Edge struct {
@@ -20,6 +28,7 @@ type Edge struct {
 	Cost int32
 	// set after each draw pass so it does not have to be recalculated
 	StartPos, EndPos rl.Vector2
+	Data AlgoData
 }
 
 type Graph struct {
@@ -42,7 +51,6 @@ func (g *Graph) AddEdge(a, b *Node) *Edge {
 	}
 	g.Edges.PushBack(aToB)
 	a.Edges.PushBack(aToB)
-	b.Edges.PushBack(aToB)
 	return aToB
 }
 
@@ -89,6 +97,11 @@ func (g *Graph) RemoveNode(n *Node) {
 			break;
 		}
 	}
+}
+func (g *Graph) AddNode(n Node) *Node {
+	nPtr := &n
+	g.Nodes.PushBack(nPtr)
+	return nPtr
 }
 func (g *Graph) RemoveEdge(e *Edge) {
 	for edgeIt := g.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {

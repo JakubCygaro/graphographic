@@ -1,6 +1,8 @@
 package history
+
 import (
 	gr "graphographic/graph"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type AddNode struct {
@@ -22,4 +24,8 @@ type EditEdgeCost struct {
 type EditNodeContent struct {
 	N *gr.Node
 	ContentPreChange string
+}
+type MoveNode struct {
+	N *gr.Node
+	PosPreChange rl.Vector2
 }
