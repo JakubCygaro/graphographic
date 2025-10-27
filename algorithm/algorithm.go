@@ -7,6 +7,7 @@ import (
 type Algorithm interface {
 	Init();
 	NodeSelected(node *graph.Node)
+	UndoSelect()
 	Start(*graph.Graph) error;
 	Update() bool;
 	GetName() string;

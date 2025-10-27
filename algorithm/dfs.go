@@ -53,3 +53,8 @@ func (algo *DFS) NodeSelected(node *graph.Node) {
 		algo.start.Data.Highlighted = true
 	}
 }
+func (algo *DFS) UndoSelect(){
+	if algo.start != nil {
+		algo.start.Data.Highlighted = false
+	}
+}

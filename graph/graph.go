@@ -10,7 +10,7 @@ type AlgoData struct {
 	Explored bool
 	Highlighted bool
 	// extra data that could be assigned and used by an algorithm
-	Custom *any
+	Custom any
 }
 
 type Node struct {

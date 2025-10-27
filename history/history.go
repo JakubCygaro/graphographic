@@ -29,3 +29,6 @@ type MoveNode struct {
 	N *gr.Node
 	PosPreChange rl.Vector2
 }
+type NodeSelected struct {
+	N *gr.Node
+}

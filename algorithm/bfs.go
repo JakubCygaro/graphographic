@@ -56,3 +56,9 @@ func (algo *BFS) NodeSelected(node *graph.Node) {
 		algo.start.Data.Highlighted = true
 	}
 }
+
+func (algo *BFS) UndoSelect(){
+	if algo.start != nil {
+		algo.start.Data.Highlighted = false
+	}
+}

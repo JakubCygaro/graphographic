@@ -125,8 +125,21 @@ func loadAlgorithms() {
 	Algorithms = append(Algorithms, dfs)
 	bfs := &algo.BFS{}
 	Algorithms = append(Algorithms, bfs)
+	dijkstra := &algo.Dijkstra{}
+	Algorithms = append(Algorithms, dijkstra)
 
 	CurrentAlgorithmName = Algorithms[CurrentAlgorithm].GetName()
+}
+
+func resetAlgoDataState() {
+	for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
+		n := nodeIt.Value.(*gr.Node)
+		n.Data = gr.AlgoData{}
+	}
+	for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
+		e := edgeIt.Value.(*gr.Edge)
+		e.Data = gr.AlgoData{}
+	}
 }
 
 func spreadNodes() {
@@ -262,7 +275,10 @@ func revertLatestAction() {
 		chN.N.Content = chN.ContentPreChange
 	} else if chN, ok := latest.(*hist.MoveNode); ok {
 		chN.N.Position = chN.PosPreChange
+	} else if _, ok := latest.(*hist.NodeSelected); ok {
+		Algorithms[CurrentAlgorithm].UndoSelect()
 	}
+
 
 }
 
@@ -293,6 +309,8 @@ func update() {
 		}
 		if rl.IsKeyReleased(rl.KeyT) {
 			Mode = MODE_ALGORITHM
+			resetAlgoDataState()
+			Algorithms[CurrentAlgorithm].Init()
 		}
 		if rl.IsKeyReleased(rl.KeyP) {
 			Mode = MODE_PLACE
@@ -310,18 +328,12 @@ func update() {
 		}
 		if rl.IsKeyReleased(rl.KeyS) {
 			CurrentAlgorithm = wrap(CurrentAlgorithm+1, 0, len(Algorithms)-1)
+			resetAlgoDataState()
 			Algorithms[CurrentAlgorithm].Init()
 			CurrentAlgorithmName = Algorithms[CurrentAlgorithm].GetName()
 		}
 		if rl.IsKeyReleased(rl.KeyR) {
-			for nodeIt := Graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
-				n := nodeIt.Value.(*gr.Node)
-				n.Data = gr.AlgoData{}
-			}
-			for edgeIt := Graph.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
-				e := edgeIt.Value.(*gr.Edge)
-				e.Data = gr.AlgoData{}
-			}
+			resetAlgoDataState()
 			if err := Algorithms[CurrentAlgorithm].Start(&Graph); err != nil {
 				rl.TraceLog(rl.LogWarning, "%s", err.Error())
 				IsAlgorithmRunning = false
@@ -414,7 +426,11 @@ func update() {
 		case MODE_MOVE:
 			NodeA = nil
 		case MODE_ALGORITHM:
-			Algorithms[CurrentAlgorithm].NodeSelected(findNodeUnderMouse())
+			slc := findNodeUnderMouse()
+			Algorithms[CurrentAlgorithm].NodeSelected(slc)
+			if slc != nil {
+				ActionHistory = append(ActionHistory, &hist.NodeSelected{ N: slc })
+			}
 		case MODE_DELETE:
 			if toDelete := findNodeUnderMouse(); toDelete != nil {
 				Graph.RemoveNode(toDelete)
