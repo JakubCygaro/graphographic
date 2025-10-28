@@ -58,7 +58,7 @@ var (
 	CurrentAlgorithm     int              = 0
 	CurrentAlgorithmName string           = "unnamed"
 	IsAlgorithmRunning   bool             = false
-	AlgorithmSpeed int = 30
+	AlgorithmSpeed       int              = 30
 
 	UpdateCounter uint64 = 0
 )
@@ -279,7 +279,6 @@ func revertLatestAction() {
 		Algorithms[CurrentAlgorithm].UndoSelect()
 	}
 
-
 }
 
 func update() {
@@ -367,7 +366,7 @@ func update() {
 			if NodeA == nil {
 				NodeA = findNodeUnderMouse()
 				if NodeA != nil {
-					ActionHistory = append(ActionHistory, &hist.MoveNode{ N: NodeA, PosPreChange: NodeA.Position })
+					ActionHistory = append(ActionHistory, &hist.MoveNode{N: NodeA, PosPreChange: NodeA.Position})
 				}
 			}
 			if NodeA != nil {
@@ -429,7 +428,7 @@ func update() {
 			slc := findNodeUnderMouse()
 			Algorithms[CurrentAlgorithm].NodeSelected(slc)
 			if slc != nil {
-				ActionHistory = append(ActionHistory, &hist.NodeSelected{ N: slc })
+				ActionHistory = append(ActionHistory, &hist.NodeSelected{N: slc})
 			}
 		case MODE_DELETE:
 			if toDelete := findNodeUnderMouse(); toDelete != nil {
@@ -558,8 +557,8 @@ func draw() {
 	rl.DrawTextEx(
 		rl.GetFontDefault(),
 		algoName,
-		rl.Vector2{X: float32(Width) - size.X , Y: 0},
-		FONT_SIZE - 4,
+		rl.Vector2{X: float32(Width) - size.X, Y: 0},
+		FONT_SIZE-4,
 		FONT_SPACING,
 		rl.Red,
 	)
@@ -600,12 +599,12 @@ func drawEdge(edge *gr.Edge) {
 	halfWay := rl.Vector2Scale(dir, 0.5)
 
 	var color rl.Color
-	
+
 	if edge.Data.Highlighted && Mode == MODE_ALGORITHM {
 		color = SelectedNodeColor
 	} else if edge.Data.Explored && Mode == MODE_ALGORITHM {
 		color = rl.Green
-	}else if edge == EdgeA && Mode == MODE_EDIT {
+	} else if edge == EdgeA && Mode == MODE_EDIT {
 		color = SelectedNodeColor
 	} else if Mode == MODE_DELETE && isEdgeUnderMouse(edge) {
 		color = rl.Red
@@ -675,6 +674,22 @@ func drawNode(node *gr.Node) {
 		FONT_SPACING-2,
 		rl.Red,
 	)
+
+	if node.Data.Tag != "" {
+		text := node.Data.Tag
+		size := rl.MeasureTextEx(rl.GetFontDefault(), text, FONT_SIZE*Scale, FONT_SPACING-2)
+		textPosition = rl.Vector2Add(position, rl.Vector2{X: 0, Y: -radius})
+		textPosition = rl.Vector2Subtract(textPosition, rl.Vector2Scale(size, 0.5))
+
+		rl.DrawTextEx(
+			rl.GetFontDefault(),
+			text,
+			textPosition,
+			FONT_SIZE*Scale,
+			FONT_SPACING-2,
+			rl.Red,
+		)
+	}
 }
 func calculateNodeRadius(node *gr.Node) float32 {
 	radius := rl.MeasureTextEx(rl.GetFontDefault(), node.Content, float32(FONT_SIZE*Scale), FONT_SPACING).X * 0.5 * Scale

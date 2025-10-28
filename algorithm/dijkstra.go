@@ -38,6 +38,7 @@ func (algo *Dijkstra) Start(g *graph.Graph) error {
 	d.Prev = nil
 	d.Cost = 0
 	algo.start.Data.Custom = d
+	algo.start.Data.Highlighted = false
 	algo.start.Data.Explored = true
 	algo.last = algo.start
 	for nodeIt := g.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
@@ -69,6 +70,7 @@ func (algo *Dijkstra) Update() bool {
 		Pop(&algo.heap)
 		d := next.Data.Custom.(*data)
 		next.Data.Explored = true
+		next.Data.Tag = fmt.Sprintf("%d", d.Cost)
 		for edgeIt := next.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 			edge := edgeIt.Value.(*graph.Edge)
 			if !edge.Head.Data.Explored {
