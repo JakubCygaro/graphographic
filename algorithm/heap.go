@@ -1,5 +1,11 @@
 package algorithm
 
+import (
+	"fmt"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
 // import "fmt"
 
 type elem[T any] struct {
@@ -23,13 +29,16 @@ func GetMin[T any](heap *MinHeap[T]) *T {
 
 func Pop[T any](heap *MinHeap[T]) {
 	if Len(heap) > 0 {
-		*heap = (*heap)[1:]
+		swap(heap, 0, Len(heap) - 1)
+		*heap = (*heap)[:Len(heap) - 1]
 	}
+	siftDown(heap, 0)
 }
 
 func Insert[T any](heap *MinHeap[T], k int32, v T) {
 	*heap = append(*heap, elem[T]{ key: k, val: v })
 	siftUp(heap, Len(heap) - 1)
+	verifyHeapProp(heap)
 }
 
 func Search[T comparable](heap *MinHeap[T], v T) (int32, bool) {
@@ -56,7 +65,7 @@ func Delete[T comparable](heap *MinHeap[T], v T) {
 	}
 	if found != -1 {
 		//swap found with last element
-		(*heap)[found], (*heap)[Len(heap)-1] = (*heap)[Len(heap)-1], (*heap)[found]
+		swap(heap, found, Len(heap) - 1)
 		// remove found from heap
 		*heap = (*heap)[:Len(heap)-1]
 		// sift swapped element up or down to maintain heap property
@@ -65,6 +74,7 @@ func Delete[T comparable](heap *MinHeap[T], v T) {
 			siftDown(heap, found)
 		}
 	}
+	verifyHeapProp(heap)
 }
 
 func parent(idx int) int {
@@ -98,13 +108,12 @@ func siftDown[T any](heap *MinHeap[T], elem int) int {
 		left, right := leftChild(heap, elem), rightChild(heap, elem)
 		var candidate int = -1
 		// if elem has a left child, it could have a right one, but without a left child there is no right child
-		if left != -1 && right == -1 {
-			candidate = left
-		} else if right != -1 && (*heap)[right].key < (*heap)[left].key {
+		candidate = left
+		if right != -1 && (*heap)[right].key <= (*heap)[left].key {
 			candidate = right
 		}
 		if candidate != -1 && (*heap)[candidate].key < (*heap)[elem].key {
-			(*heap)[elem], (*heap)[candidate] = (*heap)[candidate], (*heap)[elem]
+			swap(heap, elem, candidate)
 			elem = candidate
 		} else {
 			return elem
@@ -119,10 +128,39 @@ func siftUp[T any](heap *MinHeap[T], elem int) int {
 	for {
 		parent := parent(elem)
 		if parent != -1 && (*heap)[parent].key > (*heap)[elem].key {
-			(*heap)[parent], (*heap)[elem] = (*heap)[elem], (*heap)[parent]
+			swap(heap, parent, elem)
 			elem = parent
 		} else {
 			return elem
 		}
 	}
+}
+
+func verifyHeapProp[T any](heap* MinHeap[T]){
+	for i, e := range *heap {
+		p := parent(i)
+		l, r := leftChild(heap, i), rightChild(heap, i)
+		if p != -1 && (*heap)[p].key > e.key {
+			rl.TraceLog(rl.LogError, "PARENT HEAP PROPERTY VIOLATED IDX: %d", i)
+			printKeys(heap)
+		}
+		if l != -1 && (*heap)[l].key < e.key {
+			rl.TraceLog(rl.LogError, "LEFT HEAP PROPERTY VIOLATED IDX: %d", i)
+			printKeys(heap)
+		}
+		if r != -1 && (*heap)[r].key < e.key {
+			rl.TraceLog(rl.LogError, "RIGHT HEAP PROPERTY VIOLATED IDX: %d", i)
+			printKeys(heap)
+		}
+	}
+}
+
+func swap[T any](heap* MinHeap[T], a, b int){
+	(*heap)[a], (*heap)[b] = (*heap)[b], (*heap)[a]
+}
+func printKeys[T any](heap* MinHeap[T]){
+	for _, e := range *heap {
+		fmt.Print(e.key, " ")
+	}
+	fmt.Println()
 }
