@@ -107,7 +107,6 @@ func initGraph() {
 	node.Content = "Node B"
 	b := Graph.AddNode(node)
 	Graph.AddEdge(a, b).Cost = 10
-	Graph.AddEdge(b, a).Cost = 4
 	node.Content = "Node C"
 	c := Graph.AddNode(node)
 	Graph.AddEdge(a, c).Cost = 3
@@ -387,7 +386,7 @@ func update() {
 			ActionHistory = append(ActionHistory, &hist.AddNode{N: &node})
 		case MODE_CONNECT:
 			NodeB = findNodeUnderMouse()
-			if NodeA != nil && NodeB != nil && !NodeA.IsConnectedTo(NodeB) {
+			if NodeA != nil && NodeB != nil && !NodeA.IsConnectedTo(NodeB) && NodeA != NodeB {
 				edge := Graph.AddEdge(NodeA, NodeB)
 				ActionHistory = append(ActionHistory, &hist.AddEdge{E: edge})
 				if !Directed {

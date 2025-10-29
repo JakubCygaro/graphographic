@@ -19,12 +19,12 @@ func Len[T any](heap *MinHeap[T]) int {
 	return len(*heap)
 }
 
-func GetMin[T any](heap *MinHeap[T]) *T {
+func GetMin[T any](heap *MinHeap[T]) (int32, *T) {
 	var ret *T = nil
 	if Len(heap) > 0 {
 		ret = &(*heap)[0].val
 	}
-	return ret
+	return (*heap)[0].key, ret
 }
 
 func Pop[T any](heap *MinHeap[T]) {

@@ -7,22 +7,24 @@ import (
 )
 
 type data struct {
-	Cost int32
+	Len int32
 	Prev *graph.Node
+	InPath bool
 }
 
 type Dijkstra struct {
 	heap  MinHeap[*graph.Node]
 	start *graph.Node
 	end   *graph.Node
-	last  *graph.Node
+	prev  *graph.Node
+	graph *graph.Graph
 }
 
 func (algo *Dijkstra) Init() {
 	algo.heap = make(MinHeap[*graph.Node], 0)
 	algo.start = nil
 	algo.end = nil
-	algo.last = nil
+	algo.prev = nil
 }
 
 func (algo *Dijkstra) GetName() string {
@@ -34,61 +36,77 @@ func (algo *Dijkstra) Start(g *graph.Graph) error {
 		algo.end = nil
 		return fmt.Errorf("Start or End node not selected")
 	}
-	d := new(data)
-	d.Prev = nil
-	d.Cost = 0
-	algo.start.Data.Custom = d
+	algo.graph = g
+	startData := new(data)
+	startData.Prev = nil
+	startData.Len = 0
+	startData.InPath = false
+	algo.start.Data.Custom = startData
+
 	algo.start.Data.Highlighted = false
 	algo.start.Data.Explored = true
-	algo.last = algo.start
+
+	Insert(&algo.heap, 0, algo.start)
+
 	for nodeIt := g.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
 		n := nodeIt.Value.(*graph.Node)
-		d := new(data)
-		d.Cost = math.MaxInt32
-		d.Prev = nil
-		n.Data.Custom = d
-		n.Data.Explored = false
-		Insert(&algo.heap, d.Cost, n)
-	}
-	for edgeIt := algo.start.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
-		e := edgeIt.Value.(*graph.Edge)
-		if e.Tail == algo.start {
-			d := e.Head.Data.Custom.(*data)
-			d.Cost = e.Cost
-			d.Prev = algo.start
-			Delete(&algo.heap, e.Head)
-			Insert(&algo.heap, d.Cost, e.Head)
+		if n == algo.start {
+			continue
 		}
-	}
+		nodeData := new(data)
+		nodeData.Len = math.MaxInt32
+		nodeData.Prev = nil
+		nodeData.InPath = false
+		n.Data.Custom = nodeData
 
+		n.Data.Explored = false
+		Insert(&algo.heap, nodeData.Len, n)
+	}
 	return nil
 }
 
 func (algo *Dijkstra) Update() bool {
 	if Len(&algo.heap) > 0 {
-		next := *GetMin(&algo.heap)
+		k, n := GetMin(&algo.heap)
+		next := *n
 		Pop(&algo.heap)
-		d := next.Data.Custom.(*data)
+		nextNodeData := next.Data.Custom.(*data)
 		next.Data.Explored = true
-		next.Data.Tag = fmt.Sprintf("%d", d.Cost)
+		nextNodeData.InPath = true
+		nextNodeData.Len = k
+		next.Data.Tag = fmt.Sprintf("%d", nextNodeData.Len)
 		for edgeIt := next.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 			edge := edgeIt.Value.(*graph.Edge)
-			if !edge.Head.Data.Explored {
+			headData := edge.Head.Data.Custom.(*data)
+			if !headData.InPath && nextNodeData.Len != math.MaxInt32{
 				currentCost, _ := Search(&algo.heap, edge.Head)
-				if currentCost > d.Cost+edge.Cost {
+				if currentCost > nextNodeData.Len+edge.Cost {
 					Delete(&algo.heap, edge.Head)
 					d2 := edge.Head.Data.Custom.(*data)
-					d2.Cost = d.Cost + edge.Cost
-					Insert(&algo.heap, d2.Cost, edge.Head)
+					d2.Len = nextNodeData.Len + edge.Cost
+					Insert(&algo.heap, d2.Len, edge.Head)
 				}
 			}
 		}
-		d.Prev = algo.last
-		algo.last = next
-		if next == algo.end {
-			return false
+		nextNodeData.Prev = algo.prev
+		if nextNodeData.Len != math.MaxInt32 {
+			algo.prev = next
 		}
-		return true
+		if next != algo.end {
+			return true
+		}
+	}
+	if algo.prev == algo.end {
+		for nodeIt := algo.graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
+			n := nodeIt.Value.(*graph.Node)
+			n.Data.Explored = false
+		}
+		for prev := algo.prev; prev != nil; {
+			fmt.Println("happy")
+			prev.Data.Explored = true
+			d := prev.Data.Custom.(*data)
+			prev = d.Prev
+		}
 	}
 	return false
 }
