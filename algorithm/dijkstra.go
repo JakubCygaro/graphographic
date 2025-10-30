@@ -84,17 +84,19 @@ func (algo *Dijkstra) Update() bool {
 					Delete(&algo.heap, edge.Head)
 					d2 := edge.Head.Data.Custom.(*data)
 					d2.Len = nextNodeData.Len + edge.Cost
+					headData.Prev = next
 					Insert(&algo.heap, d2.Len, edge.Head)
 				}
 			}
 		}
-		nextNodeData.Prev = algo.prev
-		if nextNodeData.Len != math.MaxInt32 {
-			algo.prev = next
-		}
+		// nextNodeData.Prev = algo.prev
+		// if nextNodeData.Len != math.MaxInt32 {
+		// 	algo.prev = next
+		// }
 		if next != algo.end {
 			return true
 		}
+		algo.prev = next
 	}
 	if algo.prev == algo.end {
 		for nodeIt := algo.graph.Nodes.Front(); nodeIt != nil; nodeIt = nodeIt.Next() {
@@ -102,7 +104,7 @@ func (algo *Dijkstra) Update() bool {
 			n.Data.Explored = false
 		}
 		for prev := algo.prev; prev != nil; {
-			fmt.Println("happy")
+			fmt.Println(prev.Content)
 			prev.Data.Explored = true
 			d := prev.Data.Custom.(*data)
 			prev = d.Prev
