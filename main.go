@@ -49,7 +49,7 @@ var (
 	EdgeA               *gr.Edge   = nil
 	SelectedEdgeScratch string     = ""
 	Directed            bool       = false
-	GridGrain           float32    = 8
+	GridGrain           float32    = 12
 	GridSpacing         float32    = float32(Width) / GridGrain
 	ActionHistory       []any      = make([]any, 0)
 	// mouse position in screen space
@@ -59,7 +59,7 @@ var (
 	CurrentAlgorithmName string           = "unnamed"
 	IsAlgorithmRunning   bool             = false
 	AlgorithmSpeed       int              = 30
-	AlgorithmErrorMsg string = ""
+	AlgorithmErrorMsg    string           = ""
 
 	UpdateCounter uint64 = 0
 )
@@ -217,9 +217,9 @@ func getMouseWorldPos() rl.Vector2 {
 
 // transforms coordinates from world space to screen space
 func getScreenPos(position rl.Vector2) rl.Vector2 {
-	position = rl.Vector2Scale(position, Scale)
 	position = rl.Vector2Add(position, Center)
 	position = rl.Vector2Add(position, Offset)
+	position = rl.Vector2Scale(position, Scale)
 	return position
 }
 
