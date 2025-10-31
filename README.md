@@ -38,3 +38,6 @@ Enabled with the T key, lets you execute build-in algorithms on created graphs. 
 ### Delete mode
 
 Enabled with the D key, lets you delete nodes and edges.
+
+<img width="1920" height="1035" alt="image" src="https://github.com/user-attachments/assets/f075d00c-a0cc-42d3-8d6d-cfb6d714d35e" />
+
