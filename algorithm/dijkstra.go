@@ -9,6 +9,7 @@ import (
 type data struct {
 	Len int32
 	Prev *graph.Node
+	PrevEdge *graph.Edge
 	InPath bool
 }
 
@@ -74,7 +75,11 @@ func (algo *Dijkstra) Update() bool {
 		next.Data.Explored = true
 		nextNodeData.InPath = true
 		nextNodeData.Len = k
-		next.Data.Tag = fmt.Sprintf("%d", nextNodeData.Len)
+		if nextNodeData.Len == math.MaxInt32 {
+			next.Data.Tag = "Unreachable"
+		} else {
+			next.Data.Tag = fmt.Sprintf("%d", nextNodeData.Len)
+		}
 		for edgeIt := next.Edges.Front(); edgeIt != nil; edgeIt = edgeIt.Next() {
 			edge := edgeIt.Value.(*graph.Edge)
 			headData := edge.Head.Data.Custom.(*data)
@@ -85,14 +90,11 @@ func (algo *Dijkstra) Update() bool {
 					d2 := edge.Head.Data.Custom.(*data)
 					d2.Len = nextNodeData.Len + edge.Cost
 					headData.Prev = next
+					headData.PrevEdge = edge
 					Insert(&algo.heap, d2.Len, edge.Head)
 				}
 			}
 		}
-		// nextNodeData.Prev = algo.prev
-		// if nextNodeData.Len != math.MaxInt32 {
-		// 	algo.prev = next
-		// }
 		if next != algo.end {
 			return true
 		}
@@ -104,9 +106,11 @@ func (algo *Dijkstra) Update() bool {
 			n.Data.Explored = false
 		}
 		for prev := algo.prev; prev != nil; {
-			fmt.Println(prev.Content)
 			prev.Data.Explored = true
 			d := prev.Data.Custom.(*data)
+			if d.PrevEdge != nil {
+				d.PrevEdge.Data.Explored = true
+			}
 			prev = d.Prev
 		}
 	}

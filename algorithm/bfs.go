@@ -29,7 +29,6 @@ func (algo *BFS) Update() bool {
 	var next *graph.Node = nil
 	if len(algo.stack) > 0 {
 		next, algo.stack = algo.stack[len(algo.stack)-1], algo.stack[:len(algo.stack)-1]
-		fmt.Println(next.Content)
 		algo.addNodesToStack(next)
 		return true
 	} else {

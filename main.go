@@ -59,6 +59,7 @@ var (
 	CurrentAlgorithmName string           = "unnamed"
 	IsAlgorithmRunning   bool             = false
 	AlgorithmSpeed       int              = 30
+	AlgorithmErrorMsg string = ""
 
 	UpdateCounter uint64 = 0
 )
@@ -104,17 +105,29 @@ func initGraph() {
 	node := gr.NewNode()
 	node.Content = "Node A"
 	a := Graph.AddNode(node)
+
+	node = gr.NewNode()
 	node.Content = "Node B"
 	b := Graph.AddNode(node)
+
 	Graph.AddEdge(a, b).Cost = 10
+
+	node = gr.NewNode()
 	node.Content = "Node C"
 	c := Graph.AddNode(node)
+
 	Graph.AddEdge(a, c).Cost = 3
+
+	node = gr.NewNode()
 	node.Content = "Node D"
 	d := Graph.AddNode(node)
+
 	Graph.AddEdge(c, d).Cost = 12
+
+	node = gr.NewNode()
 	node.Content = "Node F"
 	f := Graph.AddNode(node)
+
 	Graph.AddEdge(c, f).Cost = 8
 	Graph.AddEdge(d, b).Cost = 7
 }
@@ -330,11 +343,12 @@ func update() {
 			Algorithms[CurrentAlgorithm].Init()
 			CurrentAlgorithmName = Algorithms[CurrentAlgorithm].GetName()
 		}
-		if rl.IsKeyReleased(rl.KeyR) {
+		if rl.IsKeyReleased(rl.KeyR) && Mode == MODE_ALGORITHM {
 			resetAlgoDataState()
 			if err := Algorithms[CurrentAlgorithm].Start(&Graph); err != nil {
 				rl.TraceLog(rl.LogWarning, "%s", err.Error())
 				IsAlgorithmRunning = false
+				AlgorithmErrorMsg = err.Error()
 			} else {
 				IsAlgorithmRunning = true
 			}
@@ -561,6 +575,23 @@ func draw() {
 		FONT_SPACING,
 		rl.Red,
 	)
+	if AlgorithmErrorMsg != "" {
+		if !IsAlgorithmRunning {
+			algoErr := "Error: " + AlgorithmErrorMsg
+			size = rl.MeasureTextEx(rl.GetFontDefault(), algoErr, FONT_SIZE-6, FONT_SPACING)
+			rl.DrawTextEx(
+				rl.GetFontDefault(),
+				algoErr,
+				rl.Vector2{X: float32(Width) - size.X, Y: float32(Height) - size.Y},
+				FONT_SIZE-6,
+				FONT_SPACING,
+				rl.Green,
+			)
+
+		} else {
+			AlgorithmErrorMsg = ""
+		}
+	}
 }
 
 func drawGraph() {
@@ -674,12 +705,17 @@ func drawNode(node *gr.Node) {
 		rl.Red,
 	)
 
-	if node.Data.Tag != "" {
+	if node.Data.Tag != "" && Mode == MODE_ALGORITHM {
 		text := node.Data.Tag
 		size := rl.MeasureTextEx(rl.GetFontDefault(), text, FONT_SIZE*Scale, FONT_SPACING-2)
 		textPosition = rl.Vector2Add(position, rl.Vector2{X: 0, Y: -radius})
 		textPosition = rl.Vector2Subtract(textPosition, rl.Vector2Scale(size, 0.5))
 
+		rl.DrawRectangleV(
+			textPosition,
+			size,
+			BackgroundColor,
+		)
 		rl.DrawTextEx(
 			rl.GetFontDefault(),
 			text,

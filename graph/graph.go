@@ -50,9 +50,9 @@ func (g *Graph) AddEdge(a, b *Node) *Edge {
 		Tail: a,
 		Head: b,
 	}
-	g.Edges.PushBack(aToB)
-	a.Edges.PushBack(aToB)
-	b.Edges.PushBack(aToB)
+	g.Edges.PushBack(aToB);
+	a.Edges.PushBack(aToB);
+	b.Edges.PushBack(aToB);
 	return aToB
 }
 
