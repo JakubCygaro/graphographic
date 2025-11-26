@@ -217,9 +217,9 @@ func getMouseWorldPos() rl.Vector2 {
 
 // transforms coordinates from world space to screen space
 func getScreenPos(position rl.Vector2) rl.Vector2 {
+	position = rl.Vector2Scale(position, Scale)
 	position = rl.Vector2Add(position, Center)
 	position = rl.Vector2Add(position, Offset)
-	position = rl.Vector2Scale(position, Scale)
 	return position
 }
 
